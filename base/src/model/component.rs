@@ -1,6 +1,11 @@
-
-/// the type of ID to use, u64, UUID, String.
+//use uuid::Uuid;
+/// the type of ID to use, u64, UUID.
 pub trait ComponentId: Copy + Eq + std::hash::Hash + std::fmt::Debug {}
+
+impl ComponentId for u32 {}
+impl ComponentId for u64 {}
+impl ComponentId for u128 {}
+//impl ComponentId for Uuid {}
 
 /// Should be a component type enum.  For instance enum StructuralType {Joint, Member}
 pub trait ComponentKind: Copy + Eq + std::hash::Hash + std::fmt::Debug {}
