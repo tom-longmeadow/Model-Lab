@@ -99,7 +99,9 @@ base_unit_macro!(LuminousIntensityUnit {
 
 temperature_unit_macro!(TemperatureUnit {
     Kelvin = (1.0, 0.0, "K"),
-    Celsius = (1.0, 273.15, "°C"),
-    Fahrenheit = (0.5555555555555556, 255.37222222222222, "°F"),
-    Rankine = (0.5555555555555556, 0.0, "°R"),
+    Celsius = (1.0, 273.15, "°C"), 
+    Fahrenheit = (5.0 / 9.0, 255.37222222222222, "°F"), 
+    Rankine = (5.0 / 9.0, 0.0, "°R"),
 });
+
+

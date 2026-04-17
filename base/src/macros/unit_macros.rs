@@ -60,7 +60,7 @@ macro_rules! temperature_unit_macro {
         $default_variant:ident = ($default_factor:expr, $default_offset:expr, $default_symbol:expr), 
         $($variant:ident = ($factor:expr, $offset:expr, $symbol:expr)),* $(,)? 
     }) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
         pub enum $name {
             #[default]
             $default_variant,
@@ -68,45 +68,46 @@ macro_rules! temperature_unit_macro {
         }
 
         impl Unit for $name {
-
             const COUNT: usize = 1 $(+ { let _ = stringify!($variant); 1 })*;
 
             fn symbol(&self) -> &'static str {
-                self.symbol()
+                match self {
+                    Self::$default_variant => $default_symbol,
+                    $(Self::$variant => $symbol),*
+                }
             }
     
             fn all_variants() -> Vec<Self> {
                 vec![Self::$default_variant, $(Self::$variant),*]
             }
      
-            fn to_si(&self, val: f64, _power: i8) -> f64 {
-                // Absolute temperature ignores power logic
-                self.to_base(val)
+            fn to_si(&self, val: f64, power: i8) -> f64 {
+                let (factor, offset) = self.values();
+                if power == 0 {
+                    // It's a Temperature Delta (Difference)
+                    val * factor
+                } else {
+                    // It's an Absolute Temperature
+                    (val * factor) + offset
+                }
             }
-            fn from_si(&self, si_val: f64, _power: i8) -> f64 {
-                self.from_base(si_val)
+
+            fn from_si(&self, si_val: f64, power: i8) -> f64 {
+                let (factor, offset) = self.values();
+                if power == 0 {
+                    si_val / factor
+                } else {
+                    (si_val - offset) / factor
+                }
             }
         }
 
         impl $name {
-            pub fn to_base(&self, value: f64) -> f64 {
+            #[inline]
+            fn values(&self) -> (f64, f64) {
                 match self {
-                    Self::$default_variant => (value * $default_factor) + $default_offset,
-                    $(Self::$variant => (value * $factor) + $offset),*
-                }
-            }
-
-            pub fn from_base(&self, kelvin: f64) -> f64 {
-                match self {
-                    Self::$default_variant => (kelvin - $default_offset) / $default_factor,
-                    $(Self::$variant => (kelvin - $offset) / $factor),*
-                }
-            }
-
-            pub fn symbol(&self) -> &'static str {
-                match self {
-                    Self::$default_variant => $default_symbol,
-                    $(Self::$variant => $symbol),*
+                    Self::$default_variant => ($default_factor, $default_offset),
+                    $(Self::$variant => ($factor, $offset)),*
                 }
             }
         }
