@@ -8,7 +8,42 @@ macro_rules! __define_test_mocks {
         use $crate::model::component::{ComponentId, ComponentData, ComponentKind};
         use $crate::model::{Model, ModelError, ModelConfig};
         use $crate::unit::{UnitSettings, UnitSetting, UnitCategory};
-        
+        use $crate::language::{Language, DisplayText, TranslationProvider};
+
+
+
+            // 1. Mock i18n Logic for the Test
+        #[derive(Default, Clone, Copy)]
+        pub enum MockLang { #[default] En }
+        impl Language for MockLang {
+            fn id(&self) -> &'static str { "en" }
+        }
+
+        #[derive(Clone, Copy)]
+        pub enum MockDisplayText { Generic }
+        impl DisplayText for MockDisplayText {
+            fn default_text(&self) -> &'static str { "Generic" }
+        }
+
+        pub struct MockTranslator;
+        impl TranslationProvider<MockLang> for MockTranslator {
+            fn translate(&self, key: &dyn DisplayText, _lang: MockLang) -> String {
+                key.default_text().to_string()
+            }
+        }
+
+        // 2. Mock Unit Logic
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+        pub enum MockUnitCategory { #[default] Generic }
+        impl UnitCategory for MockUnitCategory {}
+
+        #[derive(Default, Clone, Copy)]
+        pub struct MockUnitSetting;
+        impl UnitSetting<MockUnitCategory> for MockUnitSetting {
+            fn get_symbol(&self, _: MockUnitCategory) -> &'static str { "" }
+            fn to_si(&self, _: MockUnitCategory, v: f64) -> f64 { v }
+            fn from_si(&self, _: MockUnitCategory, v: f64) -> f64 { v }
+        }
         
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub struct MockId(pub u64);
@@ -180,20 +215,7 @@ macro_rules! test_model {
 
             $crate::__define_test_mocks!(); 
 
-            // 1. Mock Unit Logic for the Test
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-            pub enum MockUnitCategory { #[default] Generic }
-            impl UnitCategory for MockUnitCategory {}
-
-            #[derive(Default, Clone, Copy)]
-            pub struct MockUnitSetting;
-            impl UnitSetting<MockUnitCategory> for MockUnitSetting {
-                fn get_symbol(&self, _: MockUnitCategory) -> &'static str { "" }
-                fn to_si(&self, _: MockUnitCategory, v: f64) -> f64 { v }
-                fn from_si(&self, _: MockUnitCategory, v: f64) -> f64 { v }
-            }
-
-            // 2. Define the Test Config to tie everything together
+             // 3. Define the Test Config
             pub struct TestConfig;
             impl ModelConfig for TestConfig {
                 type Id = MockId;
@@ -201,14 +223,22 @@ macro_rules! test_model {
                 type Registry = $registry_type<MockId, MockData>;
                 type Category = MockUnitCategory;
                 type Setting = MockUnitSetting;
+                
+              
+                type Lang = MockLang;
+                type Display = MockDisplayText;
+                type Translator = MockTranslator;
             }
+ 
 
-            // Helper to initialize the model with the new dual UnitSettings
+            // Helper to initialize the model
             fn create_model() -> Model<TestConfig> {
                 let registry = <$registry_type<MockId, MockData>>::default();
-                let settings = UnitSettings::new(MockUnitSetting, MockUnitSetting);
+                let settings = UnitSettings::new(MockUnitSetting, MockUnitSetting); 
                 Model::new(registry, settings)
             }
+
+           
 
             #[test]
             fn test_flow() {

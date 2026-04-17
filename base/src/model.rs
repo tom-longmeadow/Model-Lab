@@ -11,7 +11,10 @@ pub use component::*;
 pub use registry::*;
 pub use error::*;
 
-use crate::unit::{UnitCategory, UnitSetting, UnitSettings};
+use crate::{
+    language::{DisplayText, Language, TranslationProvider}, 
+    unit::{UnitCategory, UnitSetting, UnitSettings}
+};
 
  
 pub trait ModelConfig: 'static {
@@ -25,6 +28,11 @@ pub trait ModelConfig: 'static {
     // Unit Types
     type Category: UnitCategory;
     type Setting: UnitSetting<Self::Category>;
+
+    // Languages
+    type Display: DisplayText; 
+    type Lang: Language;
+    type Translator: TranslationProvider<Self::Lang>;
 }
  
 pub struct Model<C> 

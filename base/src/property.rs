@@ -9,12 +9,12 @@ pub use error::*;
 pub use propertied::*;
 pub use property_node::*;
 
-use crate::{language::display_text::DisplayText, model::ModelConfig}; 
+use crate::{model::ModelConfig}; 
 
 
 pub struct Property<C: ModelConfig> {
-    pub name: DisplayText,
-    pub category: Option<C::Category>, // Using the Category enum from Config
+    pub label: C::Display,
+    pub category: Option<C::Category>, 
     pub extractor: fn(&dyn Propertied<C>) -> PropertyValue,
 }
 

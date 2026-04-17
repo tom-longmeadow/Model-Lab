@@ -1,4 +1,4 @@
-use crate::{language::display_text::DisplayText, model::ModelConfig, property::PropertyNode, };
+use crate::{model::ModelConfig, property::PropertyNode, };
 
  
 pub trait Propertied<C: ModelConfig> {
@@ -8,7 +8,7 @@ pub trait Propertied<C: ModelConfig> {
 
     fn as_any(&self) -> &dyn std::any::Any;
 
-    fn instance_name(&self) -> DisplayText;
+    fn instance_name(&self) -> C::Display;
 }
 
 
