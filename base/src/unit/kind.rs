@@ -1,6 +1,7 @@
 
 use super::{BaseUnit, UnitDimensions};
 
+/// Type of unit.  Some units are m^2 (Simple) and some are kg*m/s^2 (Compound)
 pub enum UnitKind {
     Simple(BaseUnit, i8),
     Compound(UnitDimensions),

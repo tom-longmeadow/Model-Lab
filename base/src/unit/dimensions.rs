@@ -1,6 +1,7 @@
 use super::{BaseUnit};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] // Added Copy/Eq/Hash for metadata reuse
+/// Exponents to use for unit conversion
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]  
 pub struct UnitDimensions {
     pub exponents: [i8; BaseUnit::COUNT],
 } 

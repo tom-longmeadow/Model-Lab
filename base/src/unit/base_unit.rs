@@ -14,6 +14,7 @@ enum_macro!(BaseUnit {
     LuminousIntensity,
 });
 
+// Trait for unit.
 pub trait Unit: Sized + Default + Copy + PartialEq {
      
     const COUNT: usize;

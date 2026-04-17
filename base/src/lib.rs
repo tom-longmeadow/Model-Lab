@@ -4,6 +4,7 @@ pub mod macros;
 pub mod model;
 pub mod property;
 pub mod unit;
+pub mod language;
 
 pub mod prelude {
 
@@ -12,19 +13,23 @@ pub mod prelude {
         category::*,
         dimensions::*,
         kind::*,
+        UnitSetting,
+        UnitSettings,
     };
     
     pub use crate::property::{
-        //component::*,
-        //registry::*,
+        propertied::*,
+        property_node::*,
         error::*,
-       // Model,
+        value::*,
+        Property,
     };
 
     pub use crate::model::{
         component::*,
         registry::*,
         error::*,
+        ModelConfig,
         Model,
     };
     
