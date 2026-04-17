@@ -5,19 +5,22 @@ pub mod model;
 pub mod property;
 pub mod unit;
 
-// Re-exports: Make these available at the crate root (e.g., my_crate::Registry)
-pub use crate::model::{
-    component::*,
-    registry::*,
-    error::*,
-    Model,
-};
-
 pub mod prelude {
-    // Re-export the traits so methods are available
-    //pub use crate::unit::Unit; 
+
+    pub use crate::unit::{
+        base_unit::*,
+        category::*,
+        dimensions::*,
+        kind::*,
+    };
     
-    // Re-export the core items
+    pub use crate::property::{
+        //component::*,
+        //registry::*,
+        error::*,
+       // Model,
+    };
+
     pub use crate::model::{
         component::*,
         registry::*,
