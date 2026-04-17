@@ -4,15 +4,21 @@ pub trait Language: Clone + Copy + Default {
     fn id(&self) -> &'static str; // e.g., "en-CA", "es-ES"
 }
 
-pub trait TranslationProvider<L: Language>: 'static {
-    /// Turns a DisplayKey into a localized string
-    fn translate(&self, key: &dyn DisplayText, lang: L) -> String;
-}
-
-pub trait DisplayText: 'static {
-    /// A fallback string if no translation is found
+pub trait DisplayText: 'static + Clone + Copy {
+    fn translate<L: Language>(&self, lang: L) -> String;
     fn default_text(&self) -> &'static str;
 }
+
+// pub trait TranslationProvider<L: Language>: 'static { 
+//     fn translate(&self, key: &dyn DisplayText, lang: L) -> String;
+// }
+
+
+
+// pub trait DisplayText: 'static {
+//     /// A fallback string if no translation is found
+//     fn default_text(&self) -> &'static str;
+// }
 
 
 // #[derive(Default, Clone, Copy)]

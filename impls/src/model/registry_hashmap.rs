@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use base::model::{ComponentId, ComponentData, ComponentKey, ComponentRegistry};
 
+/// An example of how to create a registry that uses a hashmap
 pub struct HashMapRegistry<I, D> 
 where 
     I: ComponentId, 

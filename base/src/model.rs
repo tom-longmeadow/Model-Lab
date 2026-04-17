@@ -12,7 +12,7 @@ pub use registry::*;
 pub use error::*;
 
 use crate::{
-    language::{DisplayText, Language, TranslationProvider}, 
+    language::{DisplayText, Language}, 
     unit::{UnitCategory, UnitSetting, UnitSettings}
 };
 
@@ -32,7 +32,7 @@ pub trait ModelConfig: 'static {
     // Languages
     type Display: DisplayText; 
     type Lang: Language;
-    type Translator: TranslationProvider<Self::Lang>;
+    //type Translator: TranslationProvider<Self::Lang>;
 }
  
 pub struct Model<C> 

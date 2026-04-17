@@ -8,7 +8,7 @@ macro_rules! __define_test_mocks {
         use $crate::model::component::{ComponentId, ComponentData, ComponentKind};
         use $crate::model::{Model, ModelError, ModelConfig};
         use $crate::unit::{UnitSettings, UnitSetting, UnitCategory};
-        use $crate::language::{Language, DisplayText, TranslationProvider};
+        use $crate::language::{Language, DisplayText};
 
 
 
@@ -19,18 +19,22 @@ macro_rules! __define_test_mocks {
             fn id(&self) -> &'static str { "en" }
         }
 
-        #[derive(Clone, Copy)]
-        pub enum MockDisplayText { Generic }
-        impl DisplayText for MockDisplayText {
-            fn default_text(&self) -> &'static str { "Generic" }
+        #[derive(Clone, Copy, Default)]
+        pub enum MockDisplayText { 
+            #[default]
+            Generic 
         }
 
-        pub struct MockTranslator;
-        impl TranslationProvider<MockLang> for MockTranslator {
-            fn translate(&self, key: &dyn DisplayText, _lang: MockLang) -> String {
-                key.default_text().to_string()
+        impl DisplayText for MockDisplayText {
+            fn default_text(&self) -> &'static str { 
+                "Generic" 
+            }
+        
+            fn translate<L: Language>(&self, _lang: L) -> String {
+                self.default_text().to_string()
             }
         }
+    
 
         // 2. Mock Unit Logic
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -227,7 +231,7 @@ macro_rules! test_model {
               
                 type Lang = MockLang;
                 type Display = MockDisplayText;
-                type Translator = MockTranslator;
+                //type Translator = MockTranslator;
             }
  
 
