@@ -3,8 +3,8 @@
     component_id_macro, 
     component_id_primitive_macro, 
     prelude::{
-        DisplayText, Propertied, Property, PropertyConfig, PropertyError, PropertyNode, PropertyValue
-    }
+        DisplayText, Propertied, PropertyConfig, PropertyNode, PropertyValue,
+    }, property::{PropertyName, PropertySchema}, property_key
 };
 
  pub trait ComponentId: Copy + Eq + std::hash::Hash + std::fmt::Debug + std::fmt::Display + std::str::FromStr {
@@ -42,6 +42,7 @@ pub struct ComponentKey<K: ComponentKind> {
 pub trait ComponentData<C: PropertyConfig>: Clone + Propertied<C> {
     type Kind: ComponentKind; 
     fn kind(&self) -> Self::Kind;
+    fn kind_name() -> PropertyName<C>;
 }
 
  
@@ -64,6 +65,10 @@ impl<C: PropertyConfig, D: ComponentData<C>> Component<C, D> {
         self.data.kind()
     }
 
+    pub fn kind_name(&self) -> PropertyName<C> {
+        D::kind_name()
+    }
+
     pub fn key(&self) -> ComponentKey<D::Kind> {
         ComponentKey {
             id: self.id,
@@ -72,47 +77,51 @@ impl<C: PropertyConfig, D: ComponentData<C>> Component<C, D> {
     }
 }
 
-impl<C: PropertyConfig + Sized, D: ComponentData<C>> Component<C, D> {
-    pub const ID_KEY: u64 = Property::<C>::hash_key("ID");
-}
-
-impl<C: PropertyConfig, D: ComponentData<C>> Propertied<C> for Component<C, D> {
-  
-
-   fn get_template() -> Vec<PropertyNode<C>> {
-        type KindId<C, D> = <<D as ComponentData<C>>::Kind as ComponentKind>::Id;
-        
-        let id: KindId<C, D> = KindId::<C, D>::invalid();
-
-        let mut template = vec![ 
-            PropertyNode::text(DisplayText::ID.into(), id.to_string()) 
-        ]; 
-         
-        template.extend(D::get_template());
-        template
-    }
-
-    fn get_value(&self, prop: &Property<C>) -> PropertyValue {
-      
-        if prop.key == Component::<C, D>::ID_KEY {
-            let id: String = self.id.to_string(); 
-            return PropertyValue::Text(id);
-        }
-         
-        self.data.get_value(prop)
-    }
-
-    fn set_value(&mut self, prop: &Property<C>, value: PropertyValue) -> Result<(), PropertyError> {
-    
-        if prop.key == Component::<C, D>::ID_KEY { 
-            self.id = prop.parse_as(value)?;
-            return Ok(());
-        }
-
-        self.data.set_value(prop, value)
-    }
+impl<C: PropertyConfig, D: ComponentData<C>> Component<C, D> { 
+   pub const ID_KEY: u64 = property_key!(C, ID);
 }
  
+ 
+impl<C: PropertyConfig, D: ComponentData<C>> Propertied<C> for Component<C, D> {
+
+    fn get_schema() -> PropertyNode<C> {
+         
+        let kind = D::kind_name(); 
+        let id_schema = PropertyNode::Leaf(
+            PropertySchema::new_id_readonly(Self::ID_KEY)
+        );
+        
+        let mut children = vec![id_schema]; 
+        
+        // 🌟 Push the entire group rather than unpacking it to keep folders intact
+        children.push(D::get_schema()); 
+         
+        PropertyNode::Group {
+            name: kind,
+            children,
+        }
+    }
+
+    fn get_value(&self, key: u64) -> Option<PropertyValue> {
+        match key { 
+            Self::ID_KEY => Some(PropertyValue::ID(self.id.to_string())), 
+            _ => self.data.get_value(key),
+        }
+    }
+
+    fn set_value(&mut self, key: u64, value: PropertyValue) {
+        match key {
+            Self::ID_KEY => {
+                if let PropertyValue::ID(s) = value {
+                    if let Ok(parsed_id) = s.parse() {
+                        self.id = parsed_id;
+                    }
+                }
+            } 
+            _ => self.data.set_value(key, value),
+        }
+    }
+}
  
 
 

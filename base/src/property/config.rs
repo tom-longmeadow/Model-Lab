@@ -3,6 +3,6 @@ use crate::prelude::{
     }; 
 
 pub trait PropertyConfig: UnitConfig {
-    type Display: DisplayLanguage + Clone + From<DisplayText> + Into<DisplayText>;  
+    type Display: DisplayLanguage + std::fmt::Debug + Clone + From<DisplayText> + Into<DisplayText>;  
     type Lang: Language; 
 }

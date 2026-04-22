@@ -9,11 +9,11 @@ pub mod test_model;
 
 pub use component::*;
 pub use registry::*;
-pub use error::*;
-pub use config::*;
+
  
- use crate::prelude::UnitSystem;
- 
+use crate::prelude::UnitSystem;
+use crate::prelude::ModelConfig;
+use crate::prelude::ModelError;
 
  pub type ModelComponent<C> = Component<C, <C as ModelConfig>::Data>;
 pub struct Model<C> 

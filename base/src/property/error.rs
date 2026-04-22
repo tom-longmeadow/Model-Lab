@@ -5,7 +5,7 @@ pub enum PropertyError {
     NotFound(String),
     TypeMismatch,
     InvalidFormat { 
-        expected: &'static str, 
+        expected: String, 
         received: String 
     },
     InvalidValue(String),

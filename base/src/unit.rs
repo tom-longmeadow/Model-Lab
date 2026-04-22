@@ -12,10 +12,10 @@ pub use category::*;
 pub use simple::*;
 pub use compound::*;
 pub use settings::*;
-pub use config::*;
 
+use crate::prelude::UnitConfig;
  
- 
+
 pub struct UnitSystem<Config: UnitConfig> {
     pub file: Config::UnitSetting,
     pub display: Config::UnitSetting,

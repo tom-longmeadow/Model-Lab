@@ -8,7 +8,7 @@ use super::{
 
 pub trait UnitConfig: 'static {
     // Unit Categories
-    type UnitCategory: UnitCategory;
+    type UnitCategory: UnitCategory + std::fmt::Debug + Clone + Copy + PartialEq;
     /// The Struct "Storage" that holds the actual SimpleUnits/CompoundUnits
     type UnitSetting: UnitSettings<Self::UnitCategory>;
 }

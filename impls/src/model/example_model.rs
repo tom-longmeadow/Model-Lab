@@ -1,4 +1,4 @@
-use base::prelude::*;
+use base::{prelude::*, property_key};
 
 use crate::model::registry_hashmap::HashMapRegistry;
  
@@ -36,11 +36,11 @@ pub struct ExampleUnitSettings {
     pub temperature: TemperatureUnit
 }
 
-/// Map the unit category to a particular unit
-/// You can use helper functions for defaults, 
-/// or make the unit yourself.
+/// Map the unit category to a specific unit
+/// You can use helper functions for SI defaults, or make the unit yourself.
 impl UnitSettings<ExampleUnitCategory> for ExampleUnitSettings {
    
+    // set up your default units.
     fn default() -> Self {
         Self {
             length: SimpleUnit::length_si(), // use the si default
@@ -48,6 +48,7 @@ impl UnitSettings<ExampleUnitCategory> for ExampleUnitSettings {
             area: SimpleUnit::area_si(),
             force: CompoundUnit::force(),
             
+            // you can create your own compound units
             dynamic_viscosity: CompoundUnit::new()// Dynamic Viscosity: kg / (m · s)
                 .with_mass(MassUnit::Kilogram, 1)
                 .with_length(LengthUnit::Meter, -1)
@@ -56,7 +57,7 @@ impl UnitSettings<ExampleUnitCategory> for ExampleUnitSettings {
         }
     }
 
-    // 2. Map the category to the specific field wrapped in UnitKind
+    
     fn get(&self, category: ExampleUnitCategory) -> UnitKind {
         match category {
             ExampleUnitCategory::Length      => UnitKind::Simple(self.length),
@@ -70,12 +71,22 @@ impl UnitSettings<ExampleUnitCategory> for ExampleUnitSettings {
      
 }
  
-// COMPONENT ID
-// This is the ID to use for components. You can use unsigned integers, like usize or u64,
-// but for more type saftey use an ID type.  Some ID types are defined but you can define your own.
-// We have defined ID64 as an u64, and have made a using statement above for it, but if you wanted a 
-// custom id you could do it with this macro
-component_id_macro!(MyName, u32);  
+/// CONFIG
+/// Now we glue all the types together so that we can start implementing
+/// generic traits ergonomically.  The master config
+pub struct ExampleModelConfig;
+
+/// implements UnitConfig
+impl UnitConfig for ExampleModelConfig {
+    type UnitCategory = ExampleUnitCategory; 
+    type UnitSetting = ExampleUnitSettings; 
+}
+
+/// implements PropertyCongig
+impl PropertyConfig for ExampleModelConfig {
+    type Display = DisplayText; 
+    type Lang = Locale; 
+}
 
 /// COMPONENT KINDS
 /// The components in the model are of different kinds, or types
@@ -85,25 +96,135 @@ pub enum ExampleKind {
     Line,
 }
 
+/// COMPONENT ID in Kind
+/// This is the ID you want to use for components. You can use unsigned integers, like usize or u64,
+/// but for more type saftey use an ID type.  Some ID types are defined but you can define your own.
+/// We have defined ID64 as an u64, but if you wanted a custom id you could do it with this macro:
+/// component_id_macro!(MyName, u32), or component_id_macro!(ID, u128)
 impl ComponentKind for ExampleKind {
     type Id = ID64; // This tells the Registry/Model to expect ID64 as the ComponentId
 }
 
-// COMPONENT DATA
-// Each component kind has associated data. There should be a one to one mapping
-// of the kind enum and data enum
+/// COMPONENT DATA
+/// Each component kind has associated data. There should be a one to one mapping
+/// of the kind enum and data enum. First declare the CompoentData.
 #[derive(Debug, Clone, Copy, PartialEq)] 
 pub enum ExampleData {
-    Point {
-        x: f64,
-        y: f64,
-        z: f64,
-    },
-    Line {
-        i_id: ID64, // make sure to use the Id defined in ExampleKind
-        j_id: ID64, 
-    },
+    Point(PointData),
+    Line(LineData),
 }
+
+/// Now declare the structs that hold the data
+#[derive(Debug, Clone, Copy, PartialEq)] 
+pub struct PointData {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+
+/// Now declare the structs that hold the data
+#[derive(Debug, Clone, Copy, PartialEq)] 
+pub struct LineData {
+    pub i_id: ID64, 
+    pub j_id: ID64, 
+}
+
+// Property bindinds to connect a property to a key for lookups
+impl PointData {
+    pub const X_KEY: u64 = property_key!(ExampleModelConfig, "PointDataX");
+    pub const Y_KEY: u64 = property_key!(ExampleModelConfig, "PointDataY");
+    pub const Z_KEY: u64 = property_key!(ExampleModelConfig, "PointDataZ");
+}
+
+impl LineData {
+    pub const I_KEY: u64 = property_key!(ExampleModelConfig, "LineDataI");
+    pub const J_KEY: u64 = property_key!(ExampleModelConfig, "LineDataJ"); 
+}
+
+
+/// COMPONENT PROPERTIES
+/// While the component data contains the fields of each component, 
+/// and you can interact with those fields programatically, we need to abstract
+/// the properties and assign labels and units, so that we can leverage spreadsheets
+/// and other UI displays of the data.  For this we use properties.
+/// Implement the Propertied for all ComponentData
+impl Propertied<ExampleModelConfig> for PointData {
+ 
+    fn get_schema() -> PropertyNode<ExampleModelConfig> {
+        PropertyNode::Group {
+            name: PropertyName::new(DisplayText::Point),
+            children: vec![
+                // 🚀 Pass your custom keys directly into the schema!
+                PropertyNode::Leaf(PropertySchema::new(
+                    DisplayText::X, PropertyValueDiscriminants::Number, Some(ExampleUnitCategory::Length), Self::X_KEY
+                )),
+                PropertyNode::Leaf(PropertySchema::new(
+                    DisplayText::Y, PropertyValueDiscriminants::Number, Some(ExampleUnitCategory::Length), Self::Y_KEY
+                )),
+                PropertyNode::Leaf(PropertySchema::new(
+                    DisplayText::Z, PropertyValueDiscriminants::Number, Some(ExampleUnitCategory::Length), Self::Z_KEY
+                )),
+            ],
+        }
+    }
+
+    fn get_value(&self, key: u64) -> Option<PropertyValue> {
+        match key {
+            Self::X_KEY => Some(PropertyValue::Number(self.x)),
+            Self::Y_KEY => Some(PropertyValue::Number(self.y)),
+            Self::Z_KEY => Some(PropertyValue::Number(self.z)),  
+            _ => None,
+        }
+    }
+
+    fn set_value(&mut self, key: u64, value: PropertyValue) {
+        match key {
+            Self::X_KEY => if let PropertyValue::Number(n) = value { self.x = n; },
+            Self::Y_KEY => if let PropertyValue::Number(n) = value { self.y = n; },
+            Self::Z_KEY => if let PropertyValue::Number(n) = value { self.z = n; },
+            _ => (), 
+        }
+    }
+}
+
+impl Propertied<ExampleModelConfig> for LineData {
+    fn get_schema() -> PropertyNode<ExampleModelConfig> {
+        PropertyNode::Group {
+            name: PropertyName::new(DisplayText::Line),
+            children: vec![
+                // 🚀 Zero strings here either!
+                PropertyNode::Leaf(PropertySchema::new_id(DisplayText::I, Self::I_KEY)),
+                PropertyNode::Leaf(PropertySchema::new_id(DisplayText::J, Self::J_KEY)),
+            ],
+        }
+    }
+
+    fn get_value(&self, key: u64) -> Option<PropertyValue> {
+        match key {
+            Self::I_KEY => Some(PropertyValue::ID(self.i_id.to_string())),
+            Self::J_KEY => Some(PropertyValue::ID(self.j_id.to_string())),
+            _ => None,
+        }
+    }
+
+    fn set_value(&mut self, key: u64, value: PropertyValue) {
+        match key {
+            Self::I_KEY => {
+                if let PropertyValue::ID(s) = value {
+                    if let Ok(parsed_id) = s.parse() { self.i_id = parsed_id; }
+                }
+            }
+            Self::J_KEY => {
+                if let PropertyValue::ID(s) = value {
+                    if let Ok(parsed_id) = s.parse() { self.j_id = parsed_id; }
+                }
+            }
+            _ => (), 
+        }
+    }
+}
+
 
 // impl<C: ModelConfig> Propertied<C> for ExampleData {
 //     fn get_template() -> Vec<PropertyNode<C>> {

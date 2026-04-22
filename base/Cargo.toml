@@ -8,4 +8,5 @@ testing = []
 
 [dependencies]
 derive_more = { workspace = true, features = ["from", "into", "display", "as_ref"] }
+strum = { workspace = true }
 

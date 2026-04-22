@@ -1,6 +1,10 @@
  
+use strum::EnumDiscriminants; 
 
+#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
+#[strum_discriminants(derive(strum::Display, strum::AsRefStr))]
 pub enum PropertyValue {
+    ID(String), // allows any type of id
     Text(String),
     Number(f64), 
     Percent(f64),
