@@ -1,6 +1,6 @@
 use crate::{
     engine::input::InputState, 
-    renderer::{Renderer, pass::text::TextRenderPass}
+    renderer::{Renderer}
 };
 
 

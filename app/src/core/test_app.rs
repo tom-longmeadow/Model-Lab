@@ -7,7 +7,7 @@ use crate::{
             font::TextFont,
             item::TextItem,
             params::TextParams,
-            style::{TextStyle, TextStyleFactory},
+            style::{TextStyleFactory},
             TextRenderPass,
         },
         Renderer,
