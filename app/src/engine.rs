@@ -19,7 +19,7 @@ use crate::{
 };
 pub struct Engine {
     renderer: Renderer,
-    scene:    Box<dyn Scene>,
+    scenes:    Box<dyn Scene>,
     input:    InputState,
 }
 
@@ -29,14 +29,17 @@ impl Engine {
         window: Arc<Window>,
         width:  u32,
         height: u32,
-        config: RendererConfig,             
+        config: RendererConfig,      
+        scene:  Box<dyn Scene>,                  
     ) -> Result<Self, RendererError> {
         tracing::info!("Engine initializing {}x{}", width, height);
-        let renderer = Renderer::new(window, width, height, config).await?;
+        let mut renderer = Renderer::new(window, width, height, config).await?;
+
+        scene.build_passes(&mut renderer);
         tracing::info!("Engine ready");
         Ok(Self {
             renderer,
-            scene: Box::new(scene::EmptyScene),
+            scenes: scene,
             input: InputState::new(),
         })
     }
@@ -58,9 +61,12 @@ impl Engine {
     }
 
     fn render(&mut self, event_loop: &ActiveEventLoop) {
+
+        tracing::info!("Rendering...");
+
         self.input.begin_frame();
-        self.scene.update(&self.input);
-        self.scene.build_passes(&mut self.renderer);
+        self.scenes.update(&self.input);
+        self.scenes.build_passes(&mut self.renderer);
         match self.renderer.render() {
             Ok(())                          => {}
             Err(RendererError::Outdated) |

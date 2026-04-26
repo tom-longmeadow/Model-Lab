@@ -4,11 +4,13 @@ use std::sync::Arc;
 use wgpu::rwh::{HasWindowHandle, HasDisplayHandle};
 
 pub mod config;
-pub mod pass; 
 pub mod error;
+pub mod pass;
 
 use crate::renderer::{
-    config::RendererConfig, error::RendererError, pass::RenderPass
+    config::RendererConfig,
+    error::RendererError,
+    pass::RenderPass,
 };
 
 
@@ -75,52 +77,76 @@ impl Renderer {
         Ok(Self { surface, device, queue, surface_cfg, config, passes: vec![] })
     }
 
+    pub fn add_pass(&mut self, mut pass: Box<dyn RenderPass>) {
+        pass.prepare(&self.device, &self.queue, &self.surface_cfg);
+        self.passes.push(pass);
+    }
+
+    pub fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    pub fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    pub fn pass_count(&self) -> usize {
+        self.passes.len()
+    }
+
+    pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
+        &self.surface_cfg
+    }
     
     pub fn render(&mut self) -> Result<(), RendererError> {
-
         let output = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)    => t,
+            wgpu::CurrentSurfaceTexture::Success(t) => t,
             wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Timeout    => return Err(RendererError::Timeout),
-            wgpu::CurrentSurfaceTexture::Occluded   => return Err(RendererError::Occluded),
-            wgpu::CurrentSurfaceTexture::Outdated   => return Err(RendererError::Outdated),
-            wgpu::CurrentSurfaceTexture::Lost       => return Err(RendererError::Lost),
+            wgpu::CurrentSurfaceTexture::Timeout => return Err(RendererError::Timeout),
+            wgpu::CurrentSurfaceTexture::Occluded => return Err(RendererError::Occluded),
+            wgpu::CurrentSurfaceTexture::Outdated => return Err(RendererError::Outdated),
+            wgpu::CurrentSurfaceTexture::Lost => return Err(RendererError::Lost),
             wgpu::CurrentSurfaceTexture::Validation => return Err(RendererError::Validation),
         };
 
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // update all passes before encoding
         for pass in &mut self.passes {
-            pass.update(&self.queue);
+            pass.update(&self.device, &self.queue);
         }
 
-        let mut encoder = self.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor { label: Some("render_encoder") }
-        );
+        let mut encoder =
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("renderer.encoder"),
+                });
 
         {
-            let mut wgpu_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("main_pass"),
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("renderer.main_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
-                    resolve_target: None,
                     depth_slice: None,
+                    resolve_target: None,
                     ops: wgpu::Operations {
-                        load:  wgpu::LoadOp::Clear(self.config.clear_color),
+                        load: wgpu::LoadOp::Clear(self.config.clear_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
                 depth_stencil_attachment: None,
-                ..Default::default()
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             for pass in &mut self.passes {
-                pass.draw(&mut wgpu_pass);
+                pass.draw(&mut render_pass);
             }
-        } // wgpu_pass dropped here — required before submit
+        }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit(Some(encoder.finish()));
         output.present();
         Ok(())
     }
@@ -135,7 +161,7 @@ impl Renderer {
         self.surface_cfg.height = height;
         self.reconfigure();
         for pass in &mut self.passes {
-            pass.prepare(&self.device, &self.surface_cfg);
+            pass.prepare(&self.device, &self.queue, &self.surface_cfg);
         }
     }
 
