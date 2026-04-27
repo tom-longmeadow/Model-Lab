@@ -1,3 +1,5 @@
+pub mod text;
+
 use std::marker::PhantomData;
 
 use crate::{

@@ -1,4 +1,6 @@
-use crate::renderer::pass::text::font::TextFont;
+use crate::ui::text::font::TextFont;
+
+ 
 
 #[derive(Clone)]
 pub struct TextStyle {

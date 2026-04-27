@@ -1,17 +1,14 @@
+use base::ui::text::{
+    font::TextFont,
+    item::TextItem,
+    params::{TextParam, TextParams},
+    style::TextStyleFactory,
+};
+
 use crate::{
     core::app_logic::AppLogic,
     engine::{input::InputState, scene::Scene},
-    renderer::{
-        config::RendererConfig,
-        pass::text::{
-            font::TextFont,
-            item::TextItem,
-            params::TextParams,
-            style::{TextStyleFactory},
-            TextRenderPass,
-        },
-        Renderer,
-    },
+    renderer::{config::RendererConfig, pass::text::TextRenderPass, Renderer},
 };
 
 pub struct TestApp;
@@ -29,7 +26,12 @@ impl AppLogic for TestApp {
 
     fn create_config(&self) -> RendererConfig {
         RendererConfig {
-            clear_color: wgpu::Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+            clear_color: wgpu::Color {
+                r: 1.0,
+                g: 0.1,
+                b: 0.1,
+                a: 1.0,
+            },
             ..RendererConfig::default()
         }
     }
@@ -53,53 +55,46 @@ impl Scene for TestScene {
 
     fn build_passes(&self, renderer: &mut Renderer) {
         if renderer.pass_count() == 0 {
+            let base = TextStyleFactory::new(TextFont::Regular, [220, 220, 220, 255]).with_ratio(1.20);
+            let header = TextStyleFactory::new(TextFont::Bold, [255, 255, 255, 255]).with_ratio(1.20);
+            let italic = TextStyleFactory::new(TextFont::Italic, [180, 180, 255, 255]).with_ratio(1.20);
 
-            // base factory — regular weight, light grey, spreadsheet ratio
-            let base = TextStyleFactory::new(
-                TextFont::Regular, 
-                [220, 220, 220, 255])
-                .with_ratio(1.20);
-
-            // header factory — bold, white
-            let header = TextStyleFactory::new(
-                TextFont::Bold, 
-                [255, 255, 255, 255])
-                .with_ratio(1.20);
-
-            let params = TextParams {
-                default_style: base.style(14.0),
-                items: vec![
-                    TextItem {
+            let groups = vec![
+                TextParam::new(
+                    header.style(32.0),
+                    vec![TextItem {
                         text: "Header".into(),
                         x: 16.0,
                         y: 20.0,
-                        style: Some(header.style(32.0)),
-                    },
-                    TextItem {
+                    }],
+                ),
+                TextParam::new(
+                    header.style(24.0),
+                    vec![TextItem {
                         text: "A1".into(),
                         x: 16.0,
                         y: 60.0,
-                        style: Some(header.style(24.0)),
-                    },
-                    TextItem {
+                    }],
+                ),
+                TextParam::new(
+                    base.style(14.0),
+                    vec![TextItem {
                         text: "B1".into(),
                         x: 120.0,
                         y: 60.0,
-                        style: None,
-                    },
-                    TextItem {
+                    }],
+                ),
+                TextParam::new(
+                    italic.style(64.0),
+                    vec![TextItem {
                         text: "italic note".into(),
                         x: 16.0,
                         y: 100.0,
-                        style: Some(
-                            TextStyleFactory::new(TextFont::Italic, [180, 180, 255, 255])
-                                .with_ratio(1.20)
-                                .style(64.0),
-                        ),
-                    },
-                ],
-            };
+                    }],
+                ),
+            ];
 
+            let params = TextParams::new(groups);
             renderer.add_pass(Box::new(TextRenderPass::new(params)));
         }
     }

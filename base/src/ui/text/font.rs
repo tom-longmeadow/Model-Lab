@@ -1,6 +1,5 @@
-use glyphon::cosmic_text;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TextFont {
     Regular,
     Bold,
@@ -18,13 +17,32 @@ pub enum TextFont {
     ExtraBoldItalic,
 }
 
- macro_rules! font {
+macro_rules! font {
     ($name:literal) => {
         include_bytes!(concat!(
-            "../../../../assets/fonts/JetBrainsMono-2/fonts/ttf/",
+            "../../../assets/fonts/JetBrainsMono-2/fonts/ttf/",
             $name
         ))
     };
+}
+
+#[derive(Clone, Debug)]
+pub struct FontWeight(pub u16);
+
+impl FontWeight {
+    pub const THIN:       FontWeight = FontWeight(100);
+    pub const LIGHT:      FontWeight = FontWeight(300);
+    pub const NORMAL:     FontWeight = FontWeight(400);
+    pub const MEDIUM:     FontWeight = FontWeight(500);
+    pub const SEMI_BOLD:  FontWeight = FontWeight(600);
+    pub const BOLD:       FontWeight = FontWeight(700);
+    pub const EXTRA_BOLD: FontWeight = FontWeight(800);
+}
+
+#[derive(Clone, Debug)]
+pub enum FontStyle {
+    Normal,
+    Italic,
 }
 
 impl TextFont {
@@ -46,8 +64,6 @@ impl TextFont {
             TextFont::ExtraBoldItalic,
         ]
     }
-
-   
 
     pub fn font_bytes(&self) -> &'static [u8] {
         match self {
@@ -72,19 +88,19 @@ impl TextFont {
         "JetBrains Mono"
     }
 
-    pub fn weight(&self) -> cosmic_text::Weight {
+    pub fn weight(&self) -> FontWeight {
         match self {
-            TextFont::Thin | TextFont::ThinItalic           => cosmic_text::Weight(100),
-            TextFont::Light | TextFont::LightItalic         => cosmic_text::Weight(300),
-            TextFont::Regular | TextFont::Italic            => cosmic_text::Weight::NORMAL,
-            TextFont::Medium | TextFont::MediumItalic       => cosmic_text::Weight(500),
-            TextFont::SemiBold | TextFont::SemiBoldItalic   => cosmic_text::Weight(600),
-            TextFont::Bold | TextFont::BoldItalic           => cosmic_text::Weight::BOLD,
-            TextFont::ExtraBold | TextFont::ExtraBoldItalic => cosmic_text::Weight(800),
+            TextFont::Thin | TextFont::ThinItalic           => FontWeight::THIN,
+            TextFont::Light | TextFont::LightItalic         => FontWeight::LIGHT,
+            TextFont::Regular | TextFont::Italic            => FontWeight::NORMAL,
+            TextFont::Medium | TextFont::MediumItalic       => FontWeight::MEDIUM,
+            TextFont::SemiBold | TextFont::SemiBoldItalic   => FontWeight::SEMI_BOLD,
+            TextFont::Bold | TextFont::BoldItalic           => FontWeight::BOLD,
+            TextFont::ExtraBold | TextFont::ExtraBoldItalic => FontWeight::EXTRA_BOLD,
         }
     }
 
-    pub fn style(&self) -> cosmic_text::Style {
+    pub fn font_style(&self) -> FontStyle {
         match self {
             TextFont::Italic
             | TextFont::BoldItalic
@@ -92,15 +108,8 @@ impl TextFont {
             | TextFont::ThinItalic
             | TextFont::MediumItalic
             | TextFont::SemiBoldItalic
-            | TextFont::ExtraBoldItalic => cosmic_text::Style::Italic,
-            _ => cosmic_text::Style::Normal,
+            | TextFont::ExtraBoldItalic => FontStyle::Italic,
+            _ => FontStyle::Normal,
         }
-    }
-
-    pub fn attrs(&self) -> glyphon::Attrs<'_> {
-        glyphon::Attrs::new()
-            .family(cosmic_text::Family::Name(self.family_name()))
-            .weight(self.weight())
-            .style(self.style())
     }
 }
