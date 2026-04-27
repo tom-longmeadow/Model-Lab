@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::env;
 
-use app::core::{App, AppLogic, TestApp};
+use app::core::{App, AppLogic, test::app::TestApp};
 
 use winit::{
     application::ApplicationHandler,

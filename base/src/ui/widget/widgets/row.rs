@@ -16,9 +16,9 @@ pub struct Row {
 }
 
 impl Row {
-    pub fn new(id: WidgetId) -> Self {
+    pub fn new() -> Self {
         Self {
-            base: WidgetBase::new(id),
+            base: WidgetBase::new(),
             container: WidgetContainer::new(),
         }
     }

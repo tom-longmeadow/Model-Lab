@@ -19,10 +19,10 @@ pub struct TextField {
 }
 
 impl TextField {
-    pub fn new(id: WidgetId, value: impl Into<String>, style: TextStyle) -> Self {
+    pub fn new(value: impl Into<String>) -> Self {
         Self {
-            base: WidgetBase::new(id),
-            text: WidgetText::new(value, style),
+            base: WidgetBase::new(),
+            text: WidgetText::new(value, TextStyle::default()),
             placeholder: String::new(),
         }
     } 

@@ -14,9 +14,9 @@ pub struct Panel {
 }
 
 impl Panel {
-    pub fn new(id: WidgetId) -> Self {
+    pub fn new() -> Self {
         Self {
-            base: WidgetBase::new(id),
+            base: WidgetBase::new(),
             container: WidgetContainer::new(),
         }
     } 

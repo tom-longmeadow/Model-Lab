@@ -15,9 +15,9 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn new(id: WidgetId, columns: usize) -> Self {
+    pub fn new(columns: usize) -> Self {
         Self {
-            base: WidgetBase::new(id),
+            base: WidgetBase::new(),
             container: WidgetContainer::new(),
             columns: columns.max(1),
         }

@@ -18,6 +18,14 @@ macro_rules! impl_widget_base {
                 self.base.set_box_model(model);
             }
 
+            pub fn with_rect(
+                mut self,
+                rect: $crate::ui::widget::layout::rect::Rect,
+            ) -> Self {
+                self.set_rect(rect);
+                self
+            }
+
             pub fn padding(&self) -> $crate::ui::widget::layout::edge_insets::EdgeInsets {
                 self.base.box_model().padding()
             }
@@ -31,6 +39,14 @@ macro_rules! impl_widget_base {
                 self.base.set_box_model(model);
             }
 
+            pub fn with_padding(
+                mut self,
+                padding: $crate::ui::widget::layout::edge_insets::EdgeInsets,
+            ) -> Self {
+                self.set_padding(padding);
+                self
+            }
+
             pub fn background(&self) -> [u8; 4] {
                 self.base.box_model().background()
             }
@@ -39,6 +55,11 @@ macro_rules! impl_widget_base {
                 let mut model = self.base.box_model();
                 model.set_background(color);
                 self.base.set_box_model(model);
+            }
+
+            pub fn with_background(mut self, color: [u8; 4]) -> Self {
+                self.set_background(color);
+                self
             }
 
             pub fn border(&self) -> $crate::ui::widget::layout::border::BorderStyle {
@@ -53,6 +74,14 @@ macro_rules! impl_widget_base {
                 model.set_border(border);
                 self.base.set_box_model(model);
             }
+
+            pub fn with_border(
+                mut self,
+                border: $crate::ui::widget::layout::border::BorderStyle,
+            ) -> Self {
+                self.set_border(border);
+                self
+            }
         }
     };
 }
@@ -62,6 +91,14 @@ macro_rules! impl_widget_text {
         impl $t {
             pub fn text(&self) -> &str {
                 self.text.text()
+            }
+
+            pub fn with_text_style(
+                mut self,
+                style: $crate::ui::text::style::TextStyle,
+            ) -> Self {
+                self.text.set_style(style);
+                self
             }
 
             pub fn set_text(&mut self, text: impl Into<String>) {

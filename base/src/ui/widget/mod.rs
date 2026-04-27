@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::ui::{
     text::params::TextParam, 
     widget::{r#box::BoxModel, layout::{
@@ -13,8 +15,22 @@ pub mod container;
 pub mod r#box;
 pub mod macros;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetId(pub u64);
+
+static NEXT_WIDGET_ID: AtomicU64 = AtomicU64::new(1);
+
+impl WidgetId {
+    pub fn next() -> Self {
+        Self(NEXT_WIDGET_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for WidgetId {
+    fn default() -> Self {
+        Self::next()
+    }
+}
 
  
 pub trait Widget { 
@@ -32,12 +48,20 @@ pub struct WidgetBase {
 }
 
 impl WidgetBase {
-    pub fn new(id: WidgetId) -> Self {
+    pub fn new() -> Self {
+        Self {
+            id: WidgetId::next(),
+            model: BoxModel::default(),
+        }
+    }
+
+    pub fn with_id(id: WidgetId) -> Self {
         Self {
             id,
             model: BoxModel::default(),
         }
     }
+
 
     pub fn id(&self) -> WidgetId {
         self.id

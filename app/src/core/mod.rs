@@ -5,10 +5,10 @@ use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
 use crate::{engine::Engine, renderer::error::RendererError};
 
 pub mod app_logic;
-pub mod test_app;
+pub mod test;
 
 pub use app_logic::AppLogic;
-pub use test_app::TestApp;
+ 
 
 pub struct App {
     engine: Engine,
