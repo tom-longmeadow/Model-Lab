@@ -7,5 +7,5 @@ edition = "2024"
 testing = []
 
 [dependencies]
- 
+glam = { workspace = true }
 

@@ -1,5 +1,8 @@
-use crate::ui::{
-    box_model::BoxModel, container::WidgetContainer, layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, macros::{impl_widget_base, impl_widget_container}, text::params::TextParam, widget::{Widget, WidgetBase} 
+use crate::ui::{ 
+    container::WidgetContainer, 
+    layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
+    macros::{impl_widget_base, impl_widget_container}, 
+    text::params::TextParam, widget::{Widget, WidgetBase, WidgetRole, collect_rects, collect_text} 
     
 };
 
@@ -12,7 +15,7 @@ pub struct Row {
 impl Row {
     pub fn new() -> Self {
         Self {
-            base: WidgetBase::new(),
+            base: WidgetBase::new(WidgetRole::Container),
             container: WidgetContainer::new(),
         }
     }
@@ -22,6 +25,11 @@ impl_widget_base!(Row);
 impl_widget_container!(Row);
 
 impl Widget for Row {
+
+    fn base(&self) -> &WidgetBase {
+        &self.base
+    }
+    
     fn measure(
         &mut self,
         available: Size,
@@ -58,11 +66,9 @@ impl Widget for Row {
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) {
-        let mut model = self.base.box_model();
-        model.set_rect(rect);
-        self.base.set_box_model(model);
+        self.base.set_rect(rect);
 
-        let gap = self.container.resolved_gap(params.gap);
+       let gap = self.container.resolved_gap(params.gap);
         let mut x = rect.x;
 
         self.container.for_each_child_mut(|child| {
@@ -83,16 +89,18 @@ impl Widget for Row {
         });
     }
 
-    fn collect_text(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_rects_inner(&self, out: &mut Vec<WidgetBase>) {
+        out.push(self.base);
         for child in self.container.children() {
-            child.collect_text(out, params);
+            collect_rects(child.as_ref(), out);
         }
     }
 
-    fn collect_rects(&self, out: &mut Vec<BoxModel>) {
-        out.push(self.base.box_model());
+    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
         for child in self.container.children() {
-            child.collect_rects(out);
+            collect_text(child.as_ref(), out, params);
         }
     }
+
+    
 }

@@ -1,4 +1,4 @@
-use crate::ui::text::font::TextFont;
+use crate::ui::{layout::color::Color, text::font::TextFont};
 
  
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,7 +16,7 @@ pub struct TextStyle {
     pub font_size: f32,
     pub line_height: f32,
     pub font: TextFont,
-    pub color: [u8; 4],
+    pub color: Color,
     pub align: TextAlign,
 }
 
@@ -25,7 +25,7 @@ impl TextStyle {
         font_size: f32,
         line_height: f32,
         font: TextFont,
-        color: [u8; 4],
+        color: Color,
         align: TextAlign,
     ) -> Self {
         Self {
@@ -36,25 +36,21 @@ impl TextStyle {
             align,
         }
     }
-}
 
-impl Default for TextStyle {
-    fn default() -> Self {
-        Self::new(24.0, 32.0, TextFont::Regular, [255, 255, 255, 255], TextAlign::Left)
-    }
+    
 }
 
 
 #[derive(Clone)]
 pub struct TextStyleFactory {
     pub font: TextFont,
-    pub color: [u8; 4],
+    pub color: Color,
     pub line_height_ratio: f32,
     pub align: TextAlign,
 }
 
 impl TextStyleFactory {
-    pub fn new(font: TextFont, color: [u8; 4]) -> Self {
+    pub fn new(font: TextFont, color: Color) -> Self {
         Self {
             font,
             color,

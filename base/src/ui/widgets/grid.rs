@@ -1,5 +1,8 @@
 use crate::ui::{ 
-    box_model::BoxModel, container::WidgetContainer, layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, macros::{impl_widget_base, impl_widget_container}, text::params::TextParam, widget::{Widget, WidgetBase}
+    container::WidgetContainer, 
+    layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
+    macros::{impl_widget_base, impl_widget_container}, 
+    text::params::TextParam, widget::{Widget, WidgetBase, WidgetRole, collect_rects, collect_text}
 
     
 };
@@ -14,7 +17,7 @@ pub struct Grid {
 impl Grid {
     pub fn new(columns: usize) -> Self {
         Self {
-            base: WidgetBase::new(),
+            base: WidgetBase::new(WidgetRole::Container),
             container: WidgetContainer::new(),
             columns: columns.max(1),
         }
@@ -25,8 +28,7 @@ impl Grid {
     }
 
     pub fn set_columns(&mut self, columns: usize) {
-        self.columns = columns.max(1);
-        self.container.set_dirty(true);
+        self.columns = columns.max(1); 
     }
 }
 
@@ -34,6 +36,11 @@ impl_widget_base!(Grid);
 impl_widget_container!(Grid);
 
 impl Widget for Grid {
+
+    fn base(&self) -> &WidgetBase {
+        &self.base
+    }
+    
     fn measure(
         &mut self,
         available: Size,
@@ -42,40 +49,29 @@ impl Widget for Grid {
     ) -> Size {
         let cols = self.columns.max(1);
         let count = self.container.children().len();
-        if count == 0 {
-            return Size { w: 0.0, h: 0.0 };
-        }
+        if count == 0 { return Size { w: 0.0, h: 0.0 }; }
 
         let gap = self.container.resolved_gap(params.gap);
         let rows = count.div_ceil(cols);
 
-        let total_gap_w = gap * (cols.saturating_sub(1) as f32);
-        let cell_w = ((available.w - total_gap_w).max(0.0)) / cols as f32;
-
+        // 1) measure each child at unconstrained width to get natural size
+        let mut col_widths = vec![0.0f32; cols];
         let mut row_heights = vec![0.0f32; rows];
 
         let mut i = 0usize;
         self.container.for_each_child_mut(|child| {
-            let s = child.measure(
-                Size {
-                    w: cell_w,
-                    h: available.h,
-                },
-                params,
-                measurer,
-            );
+            let s = child.measure(Size { w: f32::MAX, h: available.h }, params, measurer);
+            let col = i % cols;
             let row = i / cols;
+            col_widths[col] = col_widths[col].max(s.w);
             row_heights[row] = row_heights[row].max(s.h);
             i += 1;
         });
 
-        let content_h: f32 = row_heights.iter().sum();
-        let total_gap_h = gap * (rows.saturating_sub(1) as f32);
+        let total_w = col_widths.iter().sum::<f32>() + gap * (cols.saturating_sub(1) as f32);
+        let total_h = row_heights.iter().sum::<f32>() + gap * (rows.saturating_sub(1) as f32);
 
-        Size {
-            w: available.w,
-            h: (content_h + total_gap_h).min(available.h),
-        }
+        Size { w: total_w.min(available.w), h: total_h.min(available.h) }
     }
 
     fn arrange(
@@ -84,75 +80,57 @@ impl Widget for Grid {
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) {
-        let mut model = self.base.box_model();
-        model.set_rect(rect);
-        self.base.set_box_model(model);
+        self.base.set_rect(rect);
 
         let cols = self.columns.max(1);
         let count = self.container.children().len();
-        if count == 0 {
-            return;
-        }
+        if count == 0 { return; }
 
         let gap = self.container.resolved_gap(params.gap);
         let rows = count.div_ceil(cols);
 
-        let total_gap_w = gap * (cols.saturating_sub(1) as f32);
-        let cell_w = ((rect.w - total_gap_w).max(0.0)) / cols as f32;
-
-        let mut measured = vec![Size { w: 0.0, h: 0.0 }; count];
+        // 1) measure natural column widths
+        let mut col_widths = vec![0.0f32; cols];
         let mut row_heights = vec![0.0f32; rows];
 
         let mut i = 0usize;
         self.container.for_each_child_mut(|child| {
-            let s = child.measure(
-                Size {
-                    w: cell_w,
-                    h: rect.h,
-                },
-                params,
-                measurer,
-            );
-            measured[i] = s;
+            let s = child.measure(Size { w: f32::MAX, h: rect.h }, params, measurer);
+            let col = i % cols;
             let row = i / cols;
+            col_widths[col] = col_widths[col].max(s.w);
             row_heights[row] = row_heights[row].max(s.h);
             i += 1;
         });
 
+        // 2) arrange using natural widths
         let mut i = 0usize;
         self.container.for_each_child_mut(|child| {
-            let row = i / cols;
             let col = i % cols;
+            let row = i / cols;
 
-            let x = rect.x + col as f32 * (cell_w + gap);
+            let x = rect.x + col_widths.iter().take(col).sum::<f32>() + col as f32 * gap;
             let y = rect.y + row_heights.iter().take(row).sum::<f32>() + row as f32 * gap;
-            let h = measured[i].h.min(row_heights[row]);
 
             child.arrange(
-                Rect {
-                    x,
-                    y,
-                    w: cell_w,
-                    h,
-                },
+                Rect { x, y, w: col_widths[col], h: row_heights[row] },
                 params,
                 measurer,
             );
-
             i += 1;
         });
     }
 
-    fn collect_text(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_rects_inner(&self, out: &mut Vec<WidgetBase>) {
+        out.push(self.base);
         for child in self.container.children() {
-            child.collect_text(out, params);
+            collect_rects(child.as_ref(), out);
         }
     }
 
-    fn collect_rects(&self, out: &mut Vec<BoxModel>) {
-        out.push(self.base.box_model());
+    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
         for child in self.container.children() {
-            child.collect_rects(out);
+            collect_text(child.as_ref(), out, params);
         }
     }
 }

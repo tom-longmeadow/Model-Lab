@@ -124,7 +124,7 @@ impl TextRenderPass {
                 buffer,
                 left,
                 top,
-                color: group.style.color,
+                color: group.style.color.to_array(),
             });
         }
 

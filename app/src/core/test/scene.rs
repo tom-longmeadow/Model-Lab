@@ -1,18 +1,19 @@
 use base::{prelude::Locale, ui::{
     layout::{color::Color, edge_insets::EdgeInsets, layout_params::LayoutParams, rect::Rect, size::Size},
     text::{font::TextFont, params::TextParams, style::{TextStyle, TextStyleFactory}},
-    widget::Widget,
+    widget::{Widget, collect_rects, collect_text},
     widgets::{column::Column, grid::Grid, label::Label, panel::Panel, property_panel::PropertyPanel, row::Row, text_field::TextField},
 }, unit::{UnitSettings, UnitSystem}};
-use impls::examples::model::{ExampleModelConfig, ExampleUnitCategory, ExampleUnitSettings};
+use impls::examples::model::{ExampleModelConfig, ExampleUnitSettings};
 use crate::{
-    core::test::part::{Part},
+    core::test::part::Part,
     engine::{input::InputState, scene::Scene},
     renderer::{
-        pass::text::{measurer::GlyphonTextMeasurer, TextRenderPass},
-        Renderer,
+        Renderer, pass::text::{TextRenderPass, measurer::GlyphonTextMeasurer}, ui_pass_builder::UiPassBuilder
     },
 };
+
+ 
 
 #[derive(Default)]
 pub struct TestScene;
@@ -22,13 +23,11 @@ impl TestScene {
         Self::default()
     }
 
-    pub fn build_ui(heading_style: TextStyle) -> Panel {
+    pub fn build_ui(params: &LayoutParams) -> Panel {
         // Row 1: app/header info
-        let mut header_row = Row::new()
-            .with_gap(20.0)
-            .with_background(Color::rgb(40, 44, 52));
+        let mut header_row = Row::new();
 
-        header_row.push(Box::new(Label::new("Model Lab").with_style(heading_style)));
+        header_row.push(Box::new(Label::new("Model Lab")));
 
         // Row 2: primary editable fields
         let mut input_row = Row::new();
@@ -36,7 +35,7 @@ impl TestScene {
         input_row.push(Box::new(TextField::new("Engine Bolt")));
 
         // Grid: detailed properties (2 columns = label/value)
-        let mut details_grid = Grid::new(2).with_background(Color::rgb(28, 31, 38));
+        let mut details_grid = Grid::new(2);
         details_grid.push(Box::new(Label::new("Mass")));
         details_grid.push(Box::new(TextField::new("1.42 kg")));
         details_grid.push(Box::new(Label::new("Tolerance")));
@@ -54,19 +53,18 @@ impl TestScene {
         let property_panel = PropertyPanel::<ExampleModelConfig>::new(
             &part,
             &units,
-            Locale::EnUs, // use your actual enum variant if different
+            Locale::EnUs,  
+            params,
         );
         // Column containing header, input row, grid, and property panel
         let mut root_col = Column::new();
         root_col.push(Box::new(header_row));
         root_col.push(Box::new(input_row));
         root_col.push(Box::new(details_grid));
-       root_col.push(Box::new(property_panel.into_column()));
+        root_col.push(Box::new(property_panel.into_column()));
 
         // Top-level panel contains the column
         Panel::new()
-            .with_padding(EdgeInsets::all(16.0))
-            .with_background(Color::rgb(20, 22, 26))
             .with_child(Box::new(root_col))
     }
 }
@@ -76,20 +74,9 @@ impl Scene for TestScene {
 
     fn build_passes(&self, renderer: &mut Renderer) {
         if renderer.pass_count() == 0 {
-            let style_factory =
-                TextStyleFactory::new(TextFont::Regular, [220, 220, 220, 255]).with_ratio(1.20);
-
-            let body_style = style_factory.style(34.0);
-            let heading_style = style_factory.style(62.0);
-
-            // Global defaults
-            let params = LayoutParams::default()
-                .with_text(body_style)
-                .with_gap(8.0)
-                .with_control_padding(EdgeInsets::all(6.0))
-                .with_panel_padding(EdgeInsets::all(10.0));
-
-            let mut panel = Self::build_ui(heading_style);
+            
+            let params = LayoutParams::default();
+            let mut panel = Self::build_ui(&params);
 
             let mut measurer = GlyphonTextMeasurer::new();
             let screen = Size {
@@ -110,9 +97,23 @@ impl Scene for TestScene {
             );
 
             let mut groups = Vec::new();
-            panel.collect_text(&mut groups, &params);
+            collect_text(&panel, &mut groups, &params);
 
+            // debug: check box models
+            let mut models = Vec::new();
+            collect_rects(&panel, &mut models);
+            println!("box models collected: {}", models.len());
+
+            let ui_pass = UiPassBuilder::new(&params).build(
+                &panel,
+                renderer.width() as f32,
+                renderer.height() as f32,
+            );
+            renderer.add_pass(Box::new(ui_pass));
             renderer.add_pass(Box::new(TextRenderPass::new(TextParams::new(groups))));
+ 
+
+
         }
     }
 }

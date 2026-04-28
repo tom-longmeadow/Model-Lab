@@ -3,13 +3,11 @@ use std::marker::PhantomData;
 use crate::{
     property::{
         config::PropertyConfig,
-        node::{FlattenedProperty, PropertyNode},
+        node::PropertyNode,
         propertied::Propertied,
     },
     ui::{
-        layout::layout_params::LayoutParams,
-        widget::Widget,
-        widgets::{column::Column, label::Label, row::Row, text_field::TextField},
+        layout::{edge_insets::EdgeInsets, layout_params::LayoutParams}, widgets::{column::Column, label::Label, row::Row, text_field::TextField}
     },
     unit::UnitSystem,
 };
@@ -20,21 +18,19 @@ pub struct PropertyPanel<C: PropertyConfig> {
 }
 
 impl<C: PropertyConfig> PropertyPanel<C> {
-    pub fn new<T: Propertied<C>>(
+   
+     pub fn new<T: Propertied<C>>(
         object: &T,
         system: &UnitSystem<C>,
         lang: C::Lang,
+        params: &LayoutParams,
     ) -> Self {
         let mut column = Column::new();
         let schema = T::get_schema();
-        
-        Self::build_tree(&mut column, &schema, object, system, lang, 0);
-
-        Self {
-            column,
-            _c: PhantomData,
-        }
+        Self::build_tree(&mut column, &schema, object, system, lang, params, 0);
+        Self { column, _c: PhantomData }
     }
+    
 
     pub fn into_column(self) -> Column {
         self.column
@@ -54,28 +50,20 @@ impl<C: PropertyConfig> PropertyPanel<C> {
         object: &T,
         system: &UnitSystem<C>,
         lang: C::Lang,
+        params: &LayoutParams,
         depth: usize,
     ) {
         match node {
             PropertyNode::Group { name, children } => {
-                // Group header
                 let mut group_header = Row::new();
                 group_header.push(Box::new(Label::new(name.label(lang))));
                 parent.push(Box::new(group_header));
 
-                // Nested column with padding indent
                 let mut nested = Column::new();
-                nested = nested.with_padding(
-                    crate::ui::layout::edge_insets::EdgeInsets {
-                        left: 16.0 * (depth + 1) as f32,
-                        right: 0.0,
-                        top: 0.0,
-                        bottom: 0.0,
-                    },
-                );
+                nested.set_gap(params.gap);
 
                 for child in children {
-                    Self::build_tree(&mut nested, child, object, system, lang, depth + 1);
+                    Self::build_tree(&mut nested, child, object, system, lang, params, depth + 1);
                 }
 
                 parent.push(Box::new(nested));

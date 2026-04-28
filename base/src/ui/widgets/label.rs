@@ -1,6 +1,9 @@
 use crate::ui::{
-   
-    box_model::BoxModel, layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, macros::{impl_widget_base, impl_widget_text}, text::{item::TextItem, params::TextParam}, widget::{Widget, WidgetBase}, widget_text::WidgetText
+    
+    layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
+    macros::{impl_widget_base, impl_widget_text}, text::{item::TextItem, params::TextParam},
+    widget::{Widget, WidgetBase, WidgetRole},
+     widget_text::WidgetText
  
 };
 
@@ -13,7 +16,7 @@ pub struct Label {
 impl Label {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
-            base: WidgetBase::new(),
+            base: WidgetBase::new(WidgetRole::Control),
             text: WidgetText::new(value),
         }
     }
@@ -23,18 +26,38 @@ impl_widget_base!(Label);
 impl_widget_text!(Label);
 
 impl Widget for Label {
+
+    fn base(&self) -> &WidgetBase {
+        &self.base
+    }
+    
     fn measure(
         &mut self,
         available: Size,
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
-        let style = self.text.resolved_style(params.text);
+        let padding = self.base.padding(params);
+        let style = self.text.resolved_style(self.base.text_style(params));
         let s = measurer.measure(self.text.text(), &style);
         Size {
-            w: s.w.min(available.w),
-            h: s.h.min(available.h),
+            w: (s.w + padding.left + padding.right).min(available.w),
+            h: (s.h + padding.top + padding.bottom).min(available.h),
         }
+    }
+
+    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+        let rect = self.base.rect();
+        let padding = self.base.padding(params);
+        let style = self.text.resolved_style(self.base.text_style(params));
+        out.push(TextParam::new(
+            style,
+            vec![TextItem {
+                text: self.text().to_string(),
+                x: rect.x + padding.left,
+                y: rect.y + padding.top,
+            }],
+        ));
     }
 
     fn arrange(
@@ -43,26 +66,11 @@ impl Widget for Label {
         _params: &LayoutParams,
         _measurer: &mut dyn TextMeasurer,
     ) {
-        let mut model = self.base.box_model();
-        model.set_rect(rect);
-        self.base.set_box_model(model);
+        self.base.set_rect(rect);
     }
 
-    fn collect_text(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
-        let rect = self.base.box_model().rect();
-        let style = self.text.resolved_style(params.text);
-
-        out.push(TextParam::new(
-            style,
-            vec![TextItem {
-                text: self.text().to_string(),
-                x: rect.x,
-                y: rect.y,
-            }],
-        ));
-    }
-
-    fn collect_rects(&self, out: &mut Vec<BoxModel>) {
-        out.push(self.base.box_model());
+    
+    fn collect_rects_inner(&self, out: &mut Vec<WidgetBase>) {
+        out.push(self.base);
     }
 }

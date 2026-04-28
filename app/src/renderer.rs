@@ -6,6 +6,9 @@ use wgpu::rwh::{HasWindowHandle, HasDisplayHandle};
 pub mod config;
 pub mod error;
 pub mod pass;
+pub mod buffers;
+pub mod vertex;
+pub mod ui_pass_builder;
 
 use crate::renderer::{
     config::RendererConfig,

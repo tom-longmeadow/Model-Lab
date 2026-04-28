@@ -65,8 +65,7 @@ impl Engine {
         tracing::info!("Rendering...");
 
         self.input.begin_frame();
-        self.scenes.update(&self.input);
-        self.scenes.build_passes(&mut self.renderer);
+        self.scenes.update(&self.input); 
         match self.renderer.render() {
             Ok(())                          => {}
             Err(RendererError::Outdated) |
