@@ -5,6 +5,7 @@ pub struct GlyphonGroup {
     pub buffer: glyphon::Buffer,
     pub left: f32,
     pub top: f32,
+    pub buf_width: f32,
     pub color: [u8; 4],
 }
 

@@ -2,8 +2,8 @@ use crate::ui::{
     
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
     macros::{impl_widget_base, impl_widget_text}, text::{item::TextItem, params::TextParam},
-    widget::{Widget, WidgetBase, WidgetRole},
-     widget_text::WidgetText
+    widget::{ControlKind, Widget, WidgetBase},
+     widget_text::{TextKind, WidgetText}
  
 };
 
@@ -16,8 +16,8 @@ pub struct Label {
 impl Label {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
-            base: WidgetBase::new(WidgetRole::Control),
-            text: WidgetText::new(value),
+            base: WidgetBase::new(ControlKind::Label),
+            text: WidgetText::new(value, TextKind::Label),
         }
     }
 }
@@ -37,8 +37,8 @@ impl Widget for Label {
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
-        let padding = self.base.padding(params);
-        let style = self.text.resolved_style(self.base.text_style(params));
+        let padding = params.control.style_for(self.base.kind()).padding;
+        let style   = params.text.style_for(self.text.kind());
         let s = measurer.measure(self.text.text(), &style);
         Size {
             w: (s.w + padding.left + padding.right).min(available.w),
@@ -48,15 +48,11 @@ impl Widget for Label {
 
     fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
         let rect = self.base.rect();
-        let padding = self.base.padding(params);
-        let style = self.text.resolved_style(self.base.text_style(params));
+        let padding = params.control.style_for(self.base.kind()).padding;
+        let style   = params.text.style_for(self.text.kind());
         out.push(TextParam::new(
             style,
-            vec![TextItem {
-                text: self.text().to_string(),
-                x: rect.x + padding.left,
-                y: rect.y + padding.top,
-            }],
+            vec![TextItem::new(self.text(), rect, padding)],
         ));
     }
 

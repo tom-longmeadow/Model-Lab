@@ -18,10 +18,7 @@ pub struct BorderStyle {
 }
 
  
-impl BorderStyle {
-
-
-    
+impl BorderStyle { 
 
     pub fn none() -> Self {
         Self { color: Color::BLACK, width: 0.0, kind: BorderKind::None }

@@ -6,3 +6,4 @@ pub mod size;
 pub mod border;
 pub mod color; 
 pub mod corner;
+pub mod gap;

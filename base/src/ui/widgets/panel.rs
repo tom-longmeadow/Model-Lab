@@ -2,7 +2,7 @@ use crate::ui::{
     container::WidgetContainer, 
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
     macros::{impl_widget_base, impl_widget_container}, 
-    text::params::TextParam, widget::{Widget, WidgetBase, WidgetRole, collect_rects, collect_text}
+    text::params::TextParam, widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
     
 };
 
@@ -15,7 +15,7 @@ pub struct Panel {
 impl Panel {
     pub fn new() -> Self {
         Self {
-            base: WidgetBase::new(WidgetRole::Panel),
+            base: WidgetBase::new(ControlKind::Panel),
             container: WidgetContainer::new(),
         }
     }
@@ -36,7 +36,7 @@ impl Widget for Panel {
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
-        let padding = self.base.padding(params);
+        let padding = params.control.style_for(self.base.kind()).padding;
         let inner = Size {
             w: (available.w - padding.left - padding.right).max(0.0),
             h: (available.h - padding.top - padding.bottom).max(0.0),
@@ -65,7 +65,7 @@ impl Widget for Panel {
     ) {
         self.base.set_rect(rect);
 
-        let padding = self.base.padding(params);
+        let padding = params.control.style_for(self.base.kind()).padding;
         let inner = Rect {
             x: rect.x + padding.left,
             y: rect.y + padding.top,

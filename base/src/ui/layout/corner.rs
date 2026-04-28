@@ -1,6 +1,6 @@
  
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CornerStyle {
     pub radius: f32,
     pub segments: u32, 

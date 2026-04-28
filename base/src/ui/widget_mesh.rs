@@ -2,8 +2,11 @@ use crate::{
     mesh::{
         batch::MeshBatcher,
         ui::{border, quad},
-    }, ui::{layout::layout_params::LayoutParams, widget::{WidgetBase, WidgetRole}},
-     
+    },
+    ui::{
+        layout::layout_params::LayoutParams,
+        widget::WidgetBase,
+    },
 };
 
 pub fn build(bases: &[WidgetBase], params: &LayoutParams) -> MeshBatcher {
@@ -15,18 +18,14 @@ pub fn build(bases: &[WidgetBase], params: &LayoutParams) -> MeshBatcher {
 }
 
 fn collect_base_mesh(base: &WidgetBase, params: &LayoutParams, batcher: &mut MeshBatcher) {
-    let rect = base.rect();
-    let role = base.role();
+    let rect  = base.rect();
+    let style = params.control.style_for(base.kind());
 
-    let background = base.resolved_background(params.background_for(role));
-    let border_style = base.resolved_border(params.border_for(role));
-    let corner = params.corner_for(role);
-
-    if background.is_visible() {
-        batcher.push(&quad::quad(rect, background, corner));
+    if style.background.is_visible() {
+        batcher.push(&quad::quad(rect, style.background, style.corner));
     }
 
-    if let Some(mesh) = border::border(rect, border_style, corner) {
+    if let Some(mesh) = border::border(rect, style.border, style.corner) {
         batcher.push(&mesh);
     }
 }

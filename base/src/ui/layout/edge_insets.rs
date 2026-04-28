@@ -17,7 +17,7 @@ impl EdgeInsets {
 
       
     pub fn none() -> Self {
-        Self { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }
+        Self::all(0.0)
     }
 
     pub fn horizontal(&self) -> f32 { self.left + self.right }

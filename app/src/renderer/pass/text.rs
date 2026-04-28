@@ -34,21 +34,16 @@ impl TextRenderPass {
         style.font_size * 0.62
     }
 
-    fn compose_group_text(param: &TextParam) -> (String, f32, f32) {
+     fn compose_group_text(param: &TextParam) -> (String, f32, f32, f32) {
+
         if param.items.is_empty() {
-            return (String::new(), 0.0, 0.0);
+            return (String::new(), 0.0, 0.0, 0.0);
         }
 
         let mut items: Vec<&TextItem> = param.items.iter().collect();
-
-        let left = items
-            .iter()
-            .map(|i| i.x)
-            .fold(f32::INFINITY, |a, b| a.min(b));
-        let top = items
-            .iter()
-            .map(|i| i.y)
-            .fold(f32::INFINITY, |a, b| a.min(b));
+        let left  = items.iter().map(|i| i.x).fold(f32::INFINITY, f32::min);
+        let top   = items.iter().map(|i| i.y).fold(f32::INFINITY, f32::min);
+        let width = items.iter().map(|i| i.width).fold(0.0f32, f32::max);
 
         items.sort_by(|a, b| {
             a.y.partial_cmp(&b.y)
@@ -77,7 +72,7 @@ impl TextRenderPass {
             line.push_str(&item.text);
         }
 
-        (lines.join("\n"), left, top)
+        (lines.join("\n"), left, top, width)
     }
 
     fn to_cosmic_align(align: TextAlign) -> cosmic_text::Align {
@@ -90,28 +85,28 @@ impl TextRenderPass {
         }
     }
 
-    fn rebuild_groups(
-        &mut self,
+    fn rebuild_groups_with(
+        params: &TextParams,
         font_system: &mut glyphon::FontSystem,
         width: u32,
         height: u32,
     ) -> Vec<GlyphonGroup> {
-        let mut out = Vec::with_capacity(self.params.groups.len());
+        let mut out = Vec::with_capacity(params.groups.len());
 
-        for group in &self.params.groups {
-            if group.items.is_empty() {
-                continue;
-            }
+        for group in &params.groups {
+            if group.items.is_empty() { continue; }
 
             let attrs = group.style.font.attrs();
-            let (text, left, top) = Self::compose_group_text(group);
+            let (text, left, top, item_width) = Self::compose_group_text(group);
+
+            let buf_width = if item_width > 0.0 { item_width } else { width as f32 };
 
             let mut buffer = glyphon::Buffer::new(
                 font_system,
                 glyphon::Metrics::new(group.style.font_size, group.style.line_height),
             );
 
-            buffer.set_size(font_system, Some(width as f32), Some(height as f32));
+            buffer.set_size(font_system, Some(buf_width), Some(height as f32));
             buffer.set_text(
                 font_system,
                 &text,
@@ -124,12 +119,58 @@ impl TextRenderPass {
                 buffer,
                 left,
                 top,
+                buf_width,
                 color: group.style.color.to_array(),
             });
         }
 
         out
     }
+
+
+    //  fn rebuild_groups(
+    //     &mut self,
+    //     font_system: &mut glyphon::FontSystem,
+    //     width: u32,
+    //     height: u32,
+    // ) -> Vec<GlyphonGroup> {
+    //     let mut out = Vec::with_capacity(self.params.groups.len());
+
+    //     for group in &self.params.groups {
+    //         if group.items.is_empty() { continue; }
+
+    //         let attrs = group.style.font.attrs();
+    //         let (text, left, top, item_width) = Self::compose_group_text(group);
+
+    //         // use item width for alignment, fall back to screen width
+    //         let buf_width = if item_width > 0.0 { item_width } else { width as f32 };
+
+    //         let mut buffer = glyphon::Buffer::new(
+    //             font_system,
+    //             glyphon::Metrics::new(group.style.font_size, group.style.line_height),
+    //         );
+
+    //         buffer.set_size(font_system, Some(buf_width), Some(height as f32));
+    //         buffer.set_text(
+    //             font_system,
+    //             &text,
+    //             &attrs,
+    //             glyphon::Shaping::Advanced,
+    //             Some(Self::to_cosmic_align(group.style.align)),
+    //         );
+
+    //         out.push(GlyphonGroup {
+    //             buffer,
+    //             left,
+    //             top,
+    //             color: group.style.color.to_array(),
+    //         });
+    //     }
+
+    //     out
+    // }
+
+    
 }
 
 
@@ -140,28 +181,31 @@ impl RenderPass for TextRenderPass {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) {
+        // rebuild groups on every prepare — params may have changed
         if let Some(state) = &mut self.state {
-            state.width = config.width;
+            state.width  = config.width;
             state.height = config.height;
 
-            for group in &mut state.groups {
-                group.buffer.set_size(
-                    &mut state.font_system,
-                    Some(config.width as f32),
-                    Some(config.height as f32),
-                );
-            }
+            // rebuild with new params
+            let groups = Self::rebuild_groups_with(
+                &self.params,
+                &mut state.font_system,
+                config.width,
+                config.height,
+            );
+            state.groups = groups;
 
             state.viewport.update(
                 queue,
                 glyphon::Resolution {
-                    width: config.width,
+                    width:  config.width,
                     height: config.height,
                 },
             );
             return;
         }
 
+        // first time init
         let mut font_system = glyphon::FontSystem::new();
 
         for variant in TextFont::all() {
@@ -171,17 +215,22 @@ impl RenderPass for TextRenderPass {
         }
 
         let swash_cache = glyphon::SwashCache::new();
-        let cache = glyphon::Cache::new(device);
-        let mut atlas = glyphon::TextAtlas::new(device, queue, &cache, config.format);
-        let viewport = glyphon::Viewport::new(device, &cache);
-        let renderer = glyphon::TextRenderer::new(
+        let cache       = glyphon::Cache::new(device);
+        let mut atlas   = glyphon::TextAtlas::new(device, queue, &cache, config.format);
+        let viewport    = glyphon::Viewport::new(device, &cache);
+        let renderer    = glyphon::TextRenderer::new(
             &mut atlas,
             device,
             wgpu::MultisampleState::default(),
             None,
         );
 
-        let groups = self.rebuild_groups(&mut font_system, config.width, config.height);
+        let groups = Self::rebuild_groups_with(
+            &self.params,
+            &mut font_system,
+            config.width,
+            config.height,
+        );
 
         let mut state = GlyphonState {
             width: config.width,
@@ -197,7 +246,7 @@ impl RenderPass for TextRenderPass {
         state.viewport.update(
             queue,
             glyphon::Resolution {
-                width: config.width,
+                width:  config.width,
                 height: config.height,
             },
         );

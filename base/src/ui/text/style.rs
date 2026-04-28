@@ -36,8 +36,7 @@ impl TextStyle {
             align,
         }
     }
-
-    
+ 
 }
 
 

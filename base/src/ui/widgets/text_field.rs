@@ -7,8 +7,8 @@ use crate::ui::{
     }, 
     macros::{impl_widget_base, impl_widget_text}, 
     text::{item::TextItem, params::TextParam}, 
-    widget::{Widget, WidgetBase, WidgetRole}, 
-    widget_text::WidgetText 
+    widget::{ControlKind, Widget, WidgetBase}, 
+    widget_text::{TextKind, WidgetText} 
 };
 
 #[derive(Clone, Debug)]
@@ -21,8 +21,8 @@ pub struct TextField {
 impl TextField {
     pub fn new(value: impl Into<String>) -> Self {
         Self {
-            base: WidgetBase::new(WidgetRole::TextField),
-            text: WidgetText::new(value),
+            base: WidgetBase::new(ControlKind::TextField),
+            text: WidgetText::new(value, TextKind::TextField),
             placeholder: String::new(),
         }
     }
@@ -59,16 +59,13 @@ impl Widget for TextField {
     }
 
     fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
-        let rect = self.base.rect();
-        let padding = self.base.padding(params);
-        let style = self.text.resolved_style(self.base.text_style(params));
+        let rect    = self.base.rect();
+        let padding = params.control.style_for(self.base.kind()).padding;
+        let style   = params.text.style_for(self.text.kind());
+
         out.push(TextParam::new(
             style,
-            vec![TextItem {
-                text: self.display_text().to_string(),
-                x: rect.x + padding.left,
-                y: rect.y + padding.top,
-            }],
+            vec![TextItem::new(self.display_text(), rect, padding)],
         ));
     }
 
@@ -78,9 +75,9 @@ impl Widget for TextField {
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
-        let padding = self.base.padding(params);
-        let style = self.text.resolved_style(self.base.text_style(params));
-        let s = measurer.measure(self.display_text(), &style);
+        let padding = params.control.style_for(self.base.kind()).padding;
+        let style   = params.text.style_for(self.text.kind());
+        let s       = measurer.measure(self.display_text(), &style);
         Size {
             w: (s.w + padding.left + padding.right).min(available.w),
             h: (s.h + padding.top + padding.bottom).min(available.h),

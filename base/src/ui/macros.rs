@@ -38,47 +38,7 @@ macro_rules! impl_widget_base {
                 self.base.set_rect(rect);
                 self
             }
-
-            pub fn background(&self) -> Option<$crate::ui::layout::color::Color> {
-                self.base.background()
-            }
-
-            pub fn set_background(&mut self, color: $crate::ui::layout::color::Color) {
-                self.base.set_background(color);
-            }
-
-            pub fn clear_background(&mut self) {
-                self.base.clear_background();
-            }
-
-            pub fn with_background(mut self, color: $crate::ui::layout::color::Color) -> Self {
-                self.base.set_background(color);
-                self
-            }
-
-            pub fn border(&self) -> Option<$crate::ui::layout::border::BorderStyle> {
-                self.base.border()
-            }
-
-            pub fn set_border(&mut self, border: $crate::ui::layout::border::BorderStyle) {
-                self.base.set_border(border);
-            }
-
-            pub fn clear_border(&mut self) {
-                self.base.clear_border();
-            }
-
-            pub fn with_border(mut self, border: $crate::ui::layout::border::BorderStyle) -> Self {
-                self.base.set_border(border);
-                self
-            }
         }
-
-        // impl $crate::ui::widget::Widget for $t {
-        //     fn base(&self) -> &$crate::ui::widget::WidgetBase {
-        //         &self.base
-        //     }
-        // }
     };
 }
 
@@ -92,30 +52,6 @@ macro_rules! impl_widget_text {
             pub fn set_text(&mut self, text: impl Into<String>) {
                 self.text.set_text(text);
             }
-
-            pub fn style(&self) -> Option<$crate::ui::text::style::TextStyle> {
-                self.text.style()
-            }
-
-            pub fn set_style(&mut self, style: $crate::ui::text::style::TextStyle) {
-                self.text.set_style(style);
-            }
-
-            pub fn clear_style(&mut self) {
-                self.text.clear_style();
-            }
-
-            pub fn with_style(mut self, style: $crate::ui::text::style::TextStyle) -> Self {
-                self.text.set_style(style);
-                self
-            }
-
-            pub fn resolved_style(
-                &self,
-                fallback: $crate::ui::text::style::TextStyle,
-            ) -> $crate::ui::text::style::TextStyle {
-                self.text.resolved_style(fallback)
-            }
         }
     };
 }
@@ -125,23 +61,6 @@ macro_rules! impl_widget_container {
         impl $t {
             pub fn children(&self) -> &[Box<dyn $crate::ui::widget::Widget>] {
                 self.container.children()
-            }
-
-            pub fn gap(&self) -> Option<f32> {
-                self.container.gap()
-            }
-
-            pub fn set_gap(&mut self, gap: f32) {
-                self.container.set_gap(gap);
-            }
-
-            pub fn clear_gap(&mut self) {
-                self.container.clear_gap();
-            }
-
-            pub fn with_gap(mut self, gap: f32) -> Self {
-                self.container.set_gap(gap);
-                self
             }
 
             pub fn push(&mut self, child: Box<dyn $crate::ui::widget::Widget>) {
@@ -189,7 +108,7 @@ macro_rules! impl_widget_container {
         }
     };
 }
-  
+
 pub(crate) use impl_widget_base;
 pub(crate) use impl_widget_text;
 pub(crate) use impl_widget_container;

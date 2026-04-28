@@ -3,7 +3,7 @@ use crate::ui::{
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer},
      macros::{impl_widget_base, impl_widget_container}, 
      text::params::TextParam, 
-     widget::{Widget, WidgetBase, WidgetRole, collect_rects, collect_text}
+     widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
     
 };
 
@@ -16,7 +16,7 @@ pub struct Column {
 impl Column {
     pub fn new() -> Self {
         Self {
-            base: WidgetBase::new(WidgetRole::Container),
+            base: WidgetBase::new(ControlKind::Flow),
             container: WidgetContainer::new(),
         }
     }
@@ -39,8 +39,7 @@ impl Widget for Column {
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
         let count = self.container.children().len();
-        let gap = self.container.resolved_gap(params.gap);
-
+        let gap = params.flow.horizontal;
         let mut i = 0usize;
         let mut w = 0.0f32;
         let mut h = 0.0f32;
@@ -70,7 +69,7 @@ impl Widget for Column {
     ) {
           self.base.set_rect(rect);
 
-        let gap = self.container.resolved_gap(params.gap); 
+        let gap = params.flow.horizontal;
         let mut y = rect.y;
 
         self.container.for_each_child_mut(|child| {

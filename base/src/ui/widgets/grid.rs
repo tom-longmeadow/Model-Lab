@@ -2,7 +2,7 @@ use crate::ui::{
     container::WidgetContainer, 
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
     macros::{impl_widget_base, impl_widget_container}, 
-    text::params::TextParam, widget::{Widget, WidgetBase, WidgetRole, collect_rects, collect_text}
+    text::params::TextParam, widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
 
     
 };
@@ -17,7 +17,7 @@ pub struct Grid {
 impl Grid {
     pub fn new(columns: usize) -> Self {
         Self {
-            base: WidgetBase::new(WidgetRole::Container),
+            base: WidgetBase::new(ControlKind::Flow),
             container: WidgetContainer::new(),
             columns: columns.max(1),
         }
@@ -51,7 +51,9 @@ impl Widget for Grid {
         let count = self.container.children().len();
         if count == 0 { return Size { w: 0.0, h: 0.0 }; }
 
-        let gap = self.container.resolved_gap(params.gap);
+        let h_gap = params.flow.horizontal;
+        let v_gap = params.flow.vertical;
+
         let rows = count.div_ceil(cols);
 
         // 1) measure each child at unconstrained width to get natural size
@@ -68,8 +70,8 @@ impl Widget for Grid {
             i += 1;
         });
 
-        let total_w = col_widths.iter().sum::<f32>() + gap * (cols.saturating_sub(1) as f32);
-        let total_h = row_heights.iter().sum::<f32>() + gap * (rows.saturating_sub(1) as f32);
+        let total_w = col_widths.iter().sum::<f32>() + h_gap * (cols.saturating_sub(1) as f32);
+        let total_h = row_heights.iter().sum::<f32>() + v_gap * (rows.saturating_sub(1) as f32);
 
         Size { w: total_w.min(available.w), h: total_h.min(available.h) }
     }
@@ -86,7 +88,8 @@ impl Widget for Grid {
         let count = self.container.children().len();
         if count == 0 { return; }
 
-        let gap = self.container.resolved_gap(params.gap);
+        let h_gap = params.flow.horizontal;
+        let v_gap = params.flow.vertical;
         let rows = count.div_ceil(cols);
 
         // 1) measure natural column widths
@@ -109,8 +112,8 @@ impl Widget for Grid {
             let col = i % cols;
             let row = i / cols;
 
-            let x = rect.x + col_widths.iter().take(col).sum::<f32>() + col as f32 * gap;
-            let y = rect.y + row_heights.iter().take(row).sum::<f32>() + row as f32 * gap;
+            let x = rect.x + col_widths.iter().take(col).sum::<f32>() + col as f32 * h_gap;
+            let y = rect.y + row_heights.iter().take(row).sum::<f32>() + row as f32 * v_gap;
 
             child.arrange(
                 Rect { x, y, w: col_widths[col], h: row_heights[row] },
