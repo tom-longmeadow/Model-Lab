@@ -58,6 +58,8 @@ where
 /********************/ 
 #[cfg(test)]
 mod tests {  
+    use crate::sim::storage::aos::AosStorage;
+
     use super::*;   
 
    pub struct MockEntity {
@@ -77,9 +79,17 @@ mod tests {
         }
 
         fn len(&self)      -> usize { self.data.len() }
-        fn capacity(&self) -> usize { self.data.capacity() }
-        fn read(&self)     -> &[MockEntity] { &self.data }
-        fn write(&mut self) -> &mut [MockEntity] { &mut self.data }
+        fn capacity(&self) -> usize { self.data.capacity() } 
+    }
+
+    impl AosStorage for MockStorage{
+        fn read(&self)      -> &[MockEntity] {
+            &self.data
+        }
+    
+        fn write(&mut self) -> &mut [MockEntity] {
+            &mut self.data
+        } 
     }
 
     impl MockStorage {
@@ -87,6 +97,8 @@ mod tests {
         pub fn push(&mut self, item: MockEntity) { self.data.push(item); }
         pub fn get(&self, index: usize) -> &MockEntity { &self.data[index] }
     }
+
+    
     pub struct MockSolver {
         pub calls: String,
         pub received_ticks: Vec<u64>,
