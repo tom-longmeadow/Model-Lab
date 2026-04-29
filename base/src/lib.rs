@@ -8,9 +8,13 @@ pub mod language;
 pub mod ui;
 pub mod mesh;
 pub mod math;
+pub mod sim;
 
 pub mod prelude {
      
+
+    pub use crate::sim::*;
+    pub use crate::mesh::*;
     pub use crate::ui::*;
     pub use crate::language::*;
     pub use crate::unit::{
