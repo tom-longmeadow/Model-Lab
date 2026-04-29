@@ -1,13 +1,23 @@
+use crate::{
+    engine::scene::Scene, 
+    renderer::config::RendererConfig
+};
 use std::sync::Arc;
 
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
 
 use crate::{engine::Engine, renderer::error::RendererError};
 
-pub mod app_logic; 
-pub mod test;
+ 
 
-pub use app_logic::AppLogic;
+pub trait AppLogic {
+    fn create_scene(&self)  -> Box<dyn Scene>;
+    fn create_config(&self) -> RendererConfig;
+    fn title(&self)         -> &str;  
+}
+
+
+
  
 
 pub struct App {

@@ -2,7 +2,7 @@ use base::prelude::*;
 use impls::examples::model::{ExampleModelConfig, ExampleUnitCategory};
 
 #[derive(Clone, Debug)]
-pub struct Part {
+pub struct TestPart {
     pub name: String,
     pub size_mm: f64,
     pub material: String,
@@ -11,7 +11,7 @@ pub struct Part {
     pub batch: String,
 }
 
-impl Part {
+impl TestPart {
     pub fn new() -> Self {
         Self {
             name: "Engine Bolt".to_string(),
@@ -31,19 +31,23 @@ impl Part {
     pub const KEY_BATCH: u64 = PropertySchema::<ExampleModelConfig>::hash_key("part.batch");
 }
 
-impl Propertied<ExampleModelConfig> for Part {
+impl Propertied<ExampleModelConfig> for TestPart {
     fn get_schema() -> PropertyNode<ExampleModelConfig> {
         PropertyNode::Group {
             name: PropertyName::new_str("Part"),
             children: vec![
-                PropertyNode::Group {
-                    name: PropertyName::new_str("General"),
-                    children: vec![
-                        PropertyNode::new_text_str("Name", Self::KEY_NAME),
-                        PropertyNode::new_number_str("Size", ExampleUnitCategory::LengthSmall, Self::KEY_SIZE_MM),
-                        PropertyNode::new_text_str("Material", Self::KEY_MATERIAL),
-                    ],
-                },
+
+                PropertyNode::new_text_str("Name", Self::KEY_NAME),
+                PropertyNode::new_number_str("Size", ExampleUnitCategory::LengthSmall, Self::KEY_SIZE_MM),
+                PropertyNode::new_text_str("Material", Self::KEY_MATERIAL),
+                // PropertyNode::Group {
+                //     name: PropertyName::new_str("General"),
+                //     children: vec![
+                //         PropertyNode::new_text_str("Name", Self::KEY_NAME),
+                //         PropertyNode::new_number_str("Size", ExampleUnitCategory::LengthSmall, Self::KEY_SIZE_MM),
+                //         PropertyNode::new_text_str("Material", Self::KEY_MATERIAL),
+                //     ],
+                // },
                 PropertyNode::Group {
                     name: PropertyName::new_str("Manufacturing"),
                     children: vec![

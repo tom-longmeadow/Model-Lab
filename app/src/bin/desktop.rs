@@ -1,8 +1,9 @@
 use std::sync::Arc;
 use std::env;
 
-use app::core::{App, AppLogic, test::app::TestApp};
+ 
 
+use app::{core::{App, AppLogic}, test::test_app::TestApp};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,

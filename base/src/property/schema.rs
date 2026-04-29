@@ -134,7 +134,8 @@ impl<C: PropertyConfig> PropertySchema<C> {
                 if let Some(cat) = self.unit {
                     let display_kind = system.display.get(cat);
                     let converted = display_kind.from_base(*n);
-                    format!("{:.2} {}", converted, system.symbol(cat))
+                    //format!("{:.2} {}", converted, system.symbol(cat))
+                    format!("{:.2}", converted)
                 } else {
                     format!("{:.2}", n)
                 }

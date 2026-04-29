@@ -1,5 +1,6 @@
-use crate::{core::AppLogic, engine::scene::Scene, renderer::config::RendererConfig};
-use crate::core::test::scene::{TestScene};
+use crate::{core::AppLogic, engine::scene::Scene, renderer::config::RendererConfig, test::test_scene::TestScene};
+
+ 
 
 pub struct TestApp;
 

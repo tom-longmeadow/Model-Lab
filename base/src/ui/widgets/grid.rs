@@ -1,77 +1,160 @@
 use crate::ui::{ 
-    container::WidgetContainer, 
-    layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
-    macros::{impl_widget_base, impl_widget_container}, 
-    text::params::TextParam, widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
-
-    
+    layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer},
+    macros::impl_widget_base,
+    text::params::TextParam,
+    widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text},
 };
 
-#[derive(Debug)]
+ 
+pub struct GridCell {
+    pub widget: Box<dyn Widget>,
+    pub span:   usize,
+}
+
+ 
+pub struct GridContainer {
+    cells: Vec<GridCell>,
+}
+
+impl GridContainer {
+    pub fn new() -> Self { Self { cells: Vec::new() } }
+
+    pub fn push(&mut self, widget: Box<dyn Widget>, span: usize) {
+        self.cells.push(GridCell { widget, span: span.max(1) });
+    }
+
+    pub fn cells(&self) -> &[GridCell] { &self.cells }
+
+    pub fn cells_mut(&mut self) -> impl Iterator<Item = &mut GridCell> {
+        self.cells.iter_mut()
+    }
+
+    pub fn clear(&mut self) { self.cells.clear(); }
+
+    pub fn for_each_mut(&mut self, mut f: impl FnMut(&mut GridCell)) {
+        for cell in &mut self.cells { f(cell); }
+    }
+}
+
+impl Default for GridContainer {
+    fn default() -> Self { Self::new() }
+}
+
+ 
 pub struct Grid {
-    base: WidgetBase,
-    container: WidgetContainer,
-    columns: usize,
+    base:      WidgetBase,
+    container: GridContainer,
+    columns:   usize,
 }
 
 impl Grid {
     pub fn new(columns: usize) -> Self {
         Self {
-            base: WidgetBase::new(ControlKind::Flow),
-            container: WidgetContainer::new(),
-            columns: columns.max(1),
+            base:      WidgetBase::new(ControlKind::Flow),
+            container: GridContainer::new(),
+            columns:   columns.max(1),
         }
     }
 
-    pub fn columns(&self) -> usize {
-        self.columns
+    pub fn push(&mut self, widget: Box<dyn Widget>) {
+        self.container.push(widget, 1);
     }
 
-    pub fn set_columns(&mut self, columns: usize) {
-        self.columns = columns.max(1); 
+    pub fn push_spanning(&mut self, widget: Box<dyn Widget>, span: usize) {
+        self.container.push(widget, span.min(self.columns).max(1));
+    }
+
+    pub fn columns(&self) -> usize { self.columns }
+
+    pub fn set_columns(&mut self, columns: usize) { self.columns = columns.max(1); }
+
+    fn compute_col_widths(
+        &mut self,
+        available_h: f32,
+        params: &LayoutParams,
+        measurer: &mut dyn TextMeasurer,
+    ) -> (Vec<f32>, Vec<f32>) {
+        let cols  = self.columns;
+        let h_gap = params.flow.horizontal; 
+
+        let mut col_widths: Vec<f32> = vec![0.0; cols];
+
+        // pass 1 — span=1 cells establish natural column widths
+        let mut col = 0usize;
+        for cell in self.container.cells_mut() {
+            if cell.span == 1 {
+                let s = cell.widget.measure(Size { w: f32::MAX, h: available_h }, params, measurer);
+                col_widths[col] = col_widths[col].max(s.w);
+            }
+            col += cell.span;
+            if col >= cols { col = 0; }
+        }
+
+        // pass 2 — partial-span cells expand columns if needed (not full-row spans)
+        col = 0;
+        for cell in self.container.cells_mut() {
+            if cell.span > 1 && cell.span < cols {
+                let s = cell.widget.measure(Size { w: f32::MAX, h: available_h }, params, measurer);
+                let spanned_w = (0..cell.span)
+                    .map(|i| col_widths.get(col + i).copied().unwrap_or(0.0))
+                    .sum::<f32>()
+                    + h_gap * (cell.span.saturating_sub(1) as f32);
+                if s.w > spanned_w {
+                    let excess = s.w - spanned_w;
+                    let target = (0..cell.span)
+                        .find(|&i| col_widths.get(col + i).copied().unwrap_or(0.0) == 0.0)
+                        .unwrap_or(cell.span - 1);
+                    col_widths[col + target] += excess;
+                }
+            }
+            col += cell.span;
+            if col >= cols { col = 0; }
+        }
+
+        // row heights — one pass, measure at actual cell width
+        let mut row_heights: Vec<f32> = Vec::new();
+        col = 0;
+        let mut row = 0usize;
+        for cell in self.container.cells_mut() {
+            if row >= row_heights.len() { row_heights.push(0.0); }
+
+            let cell_w = (0..cell.span)
+                .map(|i| col_widths.get(col + i).copied().unwrap_or(0.0))
+                .sum::<f32>()
+                + h_gap * (cell.span.saturating_sub(1) as f32);
+
+            let s = cell.widget.measure(Size { w: cell_w, h: available_h }, params, measurer);
+            row_heights[row] = row_heights[row].max(s.h);
+
+            col += cell.span;
+            if col >= cols { col = 0; row += 1; }
+        }
+
+        (col_widths, row_heights)
     }
 }
 
 impl_widget_base!(Grid);
-impl_widget_container!(Grid);
 
 impl Widget for Grid {
+    fn base(&self) -> &WidgetBase { &self.base }
 
-    fn base(&self) -> &WidgetBase {
-        &self.base
-    }
     
+
     fn measure(
         &mut self,
         available: Size,
         params: &LayoutParams,
         measurer: &mut dyn TextMeasurer,
     ) -> Size {
-        let cols = self.columns.max(1);
-        let count = self.container.children().len();
-        if count == 0 { return Size { w: 0.0, h: 0.0 }; }
-
+        let cols  = self.columns;
         let h_gap = params.flow.horizontal;
         let v_gap = params.flow.vertical;
 
-        let rows = count.div_ceil(cols);
-
-        // 1) measure each child at unconstrained width to get natural size
-        let mut col_widths = vec![0.0f32; cols];
-        let mut row_heights = vec![0.0f32; rows];
-
-        let mut i = 0usize;
-        self.container.for_each_child_mut(|child| {
-            let s = child.measure(Size { w: f32::MAX, h: available.h }, params, measurer);
-            let col = i % cols;
-            let row = i / cols;
-            col_widths[col] = col_widths[col].max(s.w);
-            row_heights[row] = row_heights[row].max(s.h);
-            i += 1;
-        });
+        let (col_widths, row_heights) = self.compute_col_widths(available.h, params, measurer);
 
         let total_w = col_widths.iter().sum::<f32>() + h_gap * (cols.saturating_sub(1) as f32);
-        let total_h = row_heights.iter().sum::<f32>() + v_gap * (rows.saturating_sub(1) as f32);
+        let total_h = row_heights.iter().sum::<f32>() + v_gap * (row_heights.len().saturating_sub(1) as f32);
 
         Size { w: total_w.min(available.w), h: total_h.min(available.h) }
     }
@@ -84,56 +167,47 @@ impl Widget for Grid {
     ) {
         self.base.set_rect(rect);
 
-        let cols = self.columns.max(1);
-        let count = self.container.children().len();
-        if count == 0 { return; }
-
+        let cols  = self.columns;
         let h_gap = params.flow.horizontal;
         let v_gap = params.flow.vertical;
-        let rows = count.div_ceil(cols);
 
-        // 1) measure natural column widths
-        let mut col_widths = vec![0.0f32; cols];
-        let mut row_heights = vec![0.0f32; rows];
+        let (col_widths, row_heights) = self.compute_col_widths(rect.h, params, measurer);
 
-        let mut i = 0usize;
-        self.container.for_each_child_mut(|child| {
-            let s = child.measure(Size { w: f32::MAX, h: rect.h }, params, measurer);
-            let col = i % cols;
-            let row = i / cols;
-            col_widths[col] = col_widths[col].max(s.w);
-            row_heights[row] = row_heights[row].max(s.h);
-            i += 1;
-        });
+        // arrange pass
+        let mut col = 0usize;
+        let mut row = 0usize;
 
-        // 2) arrange using natural widths
-        let mut i = 0usize;
-        self.container.for_each_child_mut(|child| {
-            let col = i % cols;
-            let row = i / cols;
+        for cell in self.container.cells_mut() {
+            if row >= row_heights.len() { break; }
 
             let x = rect.x + col_widths.iter().take(col).sum::<f32>() + col as f32 * h_gap;
             let y = rect.y + row_heights.iter().take(row).sum::<f32>() + row as f32 * v_gap;
 
-            child.arrange(
-                Rect { x, y, w: col_widths[col], h: row_heights[row] },
-                params,
-                measurer,
-            );
-            i += 1;
-        });
+            let w = (0..cell.span)
+                .map(|i| col_widths.get(col + i).copied().unwrap_or(0.0))
+                .sum::<f32>()
+                + h_gap * (cell.span.saturating_sub(1) as f32);
+
+            let h = row_heights[row];
+
+            cell.widget.arrange(Rect { x, y, w, h }, params, measurer);
+
+            col += cell.span;
+            if col >= cols { col = 0; row += 1; }
+        }
     }
 
     fn collect_rects_inner(&self, out: &mut Vec<WidgetBase>) {
         out.push(self.base);
-        for child in self.container.children() {
-            collect_rects(child.as_ref(), out);
+        for cell in self.container.cells() {
+            collect_rects(cell.widget.as_ref(), out);
         }
     }
 
     fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
-        for child in self.container.children() {
-            collect_text(child.as_ref(), out, params);
+        for cell in self.container.cells() {
+            collect_text(cell.widget.as_ref(), out, params);
         }
     }
 }
+ 

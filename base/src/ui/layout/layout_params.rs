@@ -1,3 +1,5 @@
+ 
+
 use crate::ui::layout::{
     border::BorderStyle, 
     color::Color, 
@@ -18,7 +20,6 @@ pub struct ControlStyle {
     pub border:     BorderStyle,
     pub corner:     CornerStyle,
 }
- 
 #[derive(Clone, Copy, Debug)]
 pub struct TextStyles {
     pub heading:     TextStyle,
@@ -28,32 +29,29 @@ pub struct TextStyles {
     pub textfield:   TextStyle,
 }
 
-impl Default for TextStyles {
-    fn default() -> Self { 
+impl TextStyles {
+    pub fn new(base_size: f32) -> Self {
+        let f = TextStyleFactory::new(TextFont::Regular, Color::WHITE)
+            .with_align(TextAlign::Left)
+            .with_ratio(1.25);
 
-        let f = TextStyleFactory::new(
-            TextFont::Regular, Color::WHITE
-        )
-        .with_align(TextAlign::Left)
-        .with_ratio(1.25);
+        let b = TextStyleFactory::new(TextFont::Bold, Color::WHITE)
+            .with_align(TextAlign::Left)
+            .with_ratio(1.25);
 
-        let t = TextStyleFactory::new(
-            TextFont::Regular, Color::WHITE
-        )
-        .with_align(TextAlign::Right)
-        .with_ratio(1.25);
-        
+        let t = TextStyleFactory::new(TextFont::Regular, Color::WHITE)
+            .with_align(TextAlign::Right)
+            .with_ratio(1.25);
+
         Self {
-            heading:     f.style(48.0),
-            sub_heading: f.style(32.0),
-            label:       f.style(24.0),
-            caption:     f.style(24.0),
-            textfield:   t.style(24.0),
+            heading:     b.style(base_size * 1.4),
+            sub_heading: b.style(base_size * 1.2),
+            label:       f.style(base_size),
+            caption:     f.style(base_size * 0.85),
+            textfield:   t.style(base_size),
         }
     }
-}
 
-impl TextStyles {
     pub fn style_for(&self, kind: TextKind) -> TextStyle {
         match kind {
             TextKind::Heading    => self.heading,
@@ -64,6 +62,7 @@ impl TextStyles {
         }
     }
 }
+ 
  
 
 #[derive(Clone, Copy, Debug)]
@@ -84,37 +83,46 @@ impl ControlStyles {
             ControlKind::TextField => self.textfield,
             ControlKind::Button    => self.button,
             ControlKind::Panel     => self.panel,
-            ControlKind::Flow     => self.panel,
+            ControlKind::Flow     => self.flow,
         }
     }
 }
 
 impl Default for ControlStyles {
     fn default() -> Self {
+       
+
+        let padding_small = EdgeInsets::all(12.0);
+        let padding_big = EdgeInsets::all(14.0);
+        let corner_small = CornerStyle::new(8.0, 8);
+        let corner_big = CornerStyle::new(12.0, 12);
+
+
+       
         Self {
             label: ControlStyle {
-                padding:    EdgeInsets::new(4.0, 8.0, 4.0, 8.0),
+                padding:    padding_small,
                 background: Color::TRANSPARENT,
                 border:     BorderStyle::none(),
                 corner:     CornerStyle::none(),
             },
             textfield: ControlStyle {
-                padding:    EdgeInsets::new(4.0, 8.0, 4.0, 8.0),
+                padding:    padding_small,
                 background: Color::GREY_60,
-                border:     BorderStyle::none(),
-                corner:     CornerStyle::new(4.0, 8),
+                border:     BorderStyle::line(Color::GREY_20),
+                corner:     corner_small,
             },
             button: ControlStyle {
-                padding:    EdgeInsets::new(6.0, 12.0, 6.0, 12.0),
+                padding:    padding_big,
                 background: Color::GREY_50,
                 border:     BorderStyle::none(),
-                corner:     CornerStyle::new(4.0, 8),
+                corner:     corner_small,
             },
             panel: ControlStyle {
-                padding:    EdgeInsets::all(10.0),
+                padding:    padding_big,
                 background: Color::GREY_40,
-                border:     BorderStyle::none(),
-                corner:     CornerStyle::new(6.0, 8),
+                border:     BorderStyle::line(Color::BLACK),
+                corner:     corner_big,
             },
             flow: ControlStyle {
                 padding:    EdgeInsets::none(),
@@ -128,23 +136,32 @@ impl Default for ControlStyles {
 
 #[derive(Clone, Copy, Debug)]
 pub struct LayoutParams {
-    pub text:    TextStyles,
-    pub control: ControlStyles,
-    pub flow:    Gap,
+    pub text:      TextStyles,
+    pub control:   ControlStyles,
+    pub flow:      Gap,
+    pub base_size: f32,
 }
 
 impl Default for LayoutParams {
     fn default() -> Self {
-        Self {
-            text:    TextStyles::default(),
-            control: ControlStyles::default(),
-            flow:    Gap::all(6.0),
-        }
+        Self::with_base_size(32.0)
     }
 }
 
 impl LayoutParams {
-    pub fn new(text: TextStyles, control: ControlStyles, flow: Gap) -> Self {
-        Self { text, control, flow }
+    pub fn with_base_size(base_size: f32) -> Self {
+        Self {
+            text:      TextStyles::new(base_size),
+            control:   ControlStyles::default(),
+            flow:      Gap::all(6.0),
+            base_size,
+        }
     }
+
+    pub fn with_font_scale(self, scale: f32) -> Self {
+        Self::with_base_size(self.base_size * scale)
+    }
+
+    pub fn increase_font(self) -> Self { self.with_font_scale(1.1) }
+    pub fn decrease_font(self) -> Self { self.with_font_scale(0.9) }
 }

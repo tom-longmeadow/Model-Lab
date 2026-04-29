@@ -20,6 +20,13 @@ impl Label {
             text: WidgetText::new(value, TextKind::Label),
         }
     }
+
+     pub fn with_kind(text: impl Into<String>, kind: TextKind) -> Self {
+        Self {
+            base: WidgetBase::new(ControlKind::Label),
+            text: WidgetText::new(text, kind),
+        }
+    }
 }
 
 impl_widget_base!(Label);

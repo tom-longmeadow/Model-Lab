@@ -21,32 +21,36 @@ impl GlyphonTextMeasurer {
 
 impl TextMeasurer for GlyphonTextMeasurer {
     fn measure(&mut self, text: &str, style: &TextStyle) -> Size {
+        let attrs = style.font.attrs();
+
         let mut buffer = glyphon::Buffer::new(
             &mut self.font_system,
             glyphon::Metrics::new(style.font_size, style.line_height),
         );
 
-        buffer.set_wrap(&mut self.font_system, cosmic_text::Wrap::None);
-        buffer.set_size(&mut self.font_system, Some(100_000.0), None);
+        // always measure left-aligned at unconstrained width
+        // alignment affects rendering position, not natural content size
+        buffer.set_size(&mut self.font_system, Some(f32::MAX), None);
         buffer.set_text(
             &mut self.font_system,
             text,
-            &style.font.attrs(),
+            &attrs,
             glyphon::Shaping::Advanced,
-            None,
+            Some(cosmic_text::Align::Left),
         );
+        buffer.shape_until_scroll(&mut self.font_system, false);
 
-        // API names can vary slightly by glyphon/cosmic_text version.
-        let mut width = 0.0f32;
-        let mut lines = 0usize;
-        for run in buffer.layout_runs() {
-            width = width.max(run.line_w);
-            lines += 1;
-        }
+        let w = buffer
+            .layout_runs()
+            .map(|r| r.line_w)
+            .fold(0.0f32, f32::max)
+            .ceil();  // ceil prevents sub-pixel wrapping at word boundaries
 
-        Size {
-            w: width,
-            h: (lines.max(1) as f32) * style.line_height,
-        }
+        let h = buffer
+            .layout_runs()
+            .count() as f32 * style.line_height;
+
+        Size { w, h } 
     }
 }
+ 
