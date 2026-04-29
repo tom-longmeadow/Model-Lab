@@ -38,7 +38,7 @@ impl Propertied<ExampleModelConfig> for TestPart {
             children: vec![
 
                 PropertyNode::new_text_str("Name", Self::KEY_NAME),
-                PropertyNode::new_number_str("Size", ExampleUnitCategory::LengthSmall, Self::KEY_SIZE_MM),
+                PropertyNode::new_number_str("Size", ExampleUnitCategory::Length, Self::KEY_SIZE_MM),
                 PropertyNode::new_text_str("Material", Self::KEY_MATERIAL),
                 // PropertyNode::Group {
                 //     name: PropertyName::new_str("General"),

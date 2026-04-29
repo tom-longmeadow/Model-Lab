@@ -100,11 +100,8 @@ impl Grid {
                     .sum::<f32>()
                     + h_gap * (cell.span.saturating_sub(1) as f32);
                 if s.w > spanned_w {
-                    let excess = s.w - spanned_w;
-                    let target = (0..cell.span)
-                        .find(|&i| col_widths.get(col + i).copied().unwrap_or(0.0) == 0.0)
-                        .unwrap_or(cell.span - 1);
-                    col_widths[col + target] += excess;
+                    // always expand the first column of the span — never the unit label column
+                    col_widths[col] += s.w - spanned_w;
                 }
             }
             col += cell.span;

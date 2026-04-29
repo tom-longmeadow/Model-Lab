@@ -15,6 +15,10 @@ impl EdgeInsets {
         Self { left, top, right, bottom }
     }
 
+    pub fn vert_horz(vert: f32, horz: f32) -> Self {
+        Self { left: horz, top: vert, right: horz, bottom: vert }
+    }
+
       
     pub fn none() -> Self {
         Self::all(0.0)

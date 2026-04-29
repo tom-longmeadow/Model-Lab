@@ -44,8 +44,8 @@ impl TextStyles {
             .with_ratio(1.25);
 
         Self {
-            heading:     b.style(base_size * 1.4),
-            sub_heading: b.style(base_size * 1.2),
+            heading:     b.style(base_size * 1.2),
+            sub_heading: b.style(base_size * 1.1),
             label:       f.style(base_size),
             caption:     f.style(base_size * 0.85),
             textfield:   t.style(base_size),
@@ -92,10 +92,10 @@ impl Default for ControlStyles {
     fn default() -> Self {
        
 
-        let padding_small = EdgeInsets::all(12.0);
-        let padding_big = EdgeInsets::all(14.0);
-        let corner_small = CornerStyle::new(8.0, 8);
-        let corner_big = CornerStyle::new(12.0, 12);
+        let padding_small = EdgeInsets::vert_horz(8.0, 8.0);
+        let padding_big = EdgeInsets::vert_horz(12.0, 12.0);
+        let corner_small = CornerStyle::new(6.0, 6);
+        let corner_big = CornerStyle::new(10.0, 10);
 
 
        
@@ -153,7 +153,7 @@ impl LayoutParams {
         Self {
             text:      TextStyles::new(base_size),
             control:   ControlStyles::default(),
-            flow:      Gap::all(6.0),
+            flow:      Gap::all(8.0),
             base_size,
         }
     }
