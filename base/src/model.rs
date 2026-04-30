@@ -5,7 +5,7 @@ pub mod error;
 pub mod config;
  
 #[cfg(feature = "testing")]
-pub mod test_model;
+pub mod test;
 
 pub use component::*;
 pub use registry::*;

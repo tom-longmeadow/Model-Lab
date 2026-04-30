@@ -56,6 +56,36 @@ impl CompoundUnit {
         self.with(SimpleUnit::LuminousIntensity { unit, exponent })
     }
 
+
+    /// Convert a value from self to SI base units
+    pub fn to_base(&self, val: f64) -> f64 {
+        let mut result = val;
+        for component in &self.components {
+            if component.exponent() != 0 {
+                result = component.to_base(result);
+            }
+        }
+        result
+    }
+
+    /// Convert a value from SI base units to self
+    pub fn from_base(&self, val: f64) -> f64 {
+        let mut result = val;
+        for component in &self.components {
+            if component.exponent() != 0 {
+                result = component.from_base(result);
+            }
+        }
+        result
+    }
+
+    /// Convert a value from one CompoundUnit to another.
+    /// Both must represent the same physical dimension (e.g. Force to Force).
+    pub fn convert(&self, val: f64, target: &CompoundUnit) -> f64 {
+        let si = self.to_base(val);
+        target.from_base(si)
+    }
+
    pub const fn force() -> Self {
         Self::new()
             .with_mass(MassUnit::DEFAULT, 1)
