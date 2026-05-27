@@ -4,10 +4,9 @@ pub mod glyphon_state;
 pub mod measurer;
 
 use base::ui::text::{
-    font::TextFont, 
-    item::TextItem, 
-    params::{TextParam, TextParams}, 
-    style::{TextAlign, TextStyle}
+    font::TextFont,  
+    params::{TextParams}, 
+    style::{TextAlign}
 };
 use glyphon::cosmic_text;
  
@@ -69,53 +68,7 @@ impl TextRenderPass {
 
         out
     }
-
-    // fn approx_char_width(style: &TextStyle) -> f32 {
-    //     // tuned for monospace fonts; adjust if needed
-    //     style.font_size * 0.62
-    // }
-
-    //  fn compose_group_text(param: &TextParam) -> (String, f32, f32, f32) {
-
-    //     if param.items.is_empty() {
-    //         return (String::new(), 0.0, 0.0, 0.0);
-    //     }
-
-    //     let mut items: Vec<&TextItem> = param.items.iter().collect();
-    //     let left  = items.iter().map(|i| i.x).fold(f32::INFINITY, f32::min);
-    //     let top   = items.iter().map(|i| i.y).fold(f32::INFINITY, f32::min);
-    //     let width = items.iter().map(|i| i.width).fold(0.0f32, f32::max);
-
-    //     items.sort_by(|a, b| {
-    //         a.y.partial_cmp(&b.y)
-    //             .unwrap_or(std::cmp::Ordering::Equal)
-    //             .then_with(|| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
-    //     });
-
-    //     let line_h = param.style.line_height.max(1.0);
-    //     let char_w = Self::approx_char_width(&param.style).max(1.0);
-
-    //     let mut lines: Vec<String> = Vec::new();
-
-    //     for item in items {
-    //         let row = ((item.y - top) / line_h).round().max(0.0) as usize;
-    //         let col = ((item.x - left) / char_w).round().max(0.0) as usize;
-
-    //         if lines.len() <= row {
-    //             lines.resize_with(row + 1, String::new);
-    //         }
-
-    //         let line = &mut lines[row];
-    //         let current_cols = line.chars().count();
-    //         if current_cols < col {
-    //             line.push_str(&" ".repeat(col - current_cols));
-    //         }
-    //         line.push_str(&item.text);
-    //     }
-
-    //     (lines.join("\n"), left, top, width)
-    // }
-
+ 
     fn to_cosmic_align(align: TextAlign) -> cosmic_text::Align {
         match align {
             TextAlign::Left => cosmic_text::Align::Left,
@@ -125,92 +78,7 @@ impl TextRenderPass {
             TextAlign::End => cosmic_text::Align::End,
         }
     }
-
-    // fn rebuild_groups_with(
-    //     params: &TextParams,
-    //     font_system: &mut glyphon::FontSystem,
-    //     width: u32,
-    //     height: u32,
-    // ) -> Vec<GlyphonGroup> {
-    //     let mut out = Vec::with_capacity(params.groups.len());
-
-    //     for group in &params.groups {
-    //         if group.items.is_empty() { continue; }
-
-    //         let attrs = group.style.font.attrs();
-    //         let (text, left, top, item_width) = Self::compose_group_text(group);
-
-    //         let buf_width = if item_width > 0.0 { item_width } else { width as f32 };
-
-    //         let mut buffer = glyphon::Buffer::new(
-    //             font_system,
-    //             glyphon::Metrics::new(group.style.font_size, group.style.line_height),
-    //         );
-
-    //         buffer.set_size(font_system, Some(buf_width), Some(height as f32));
-    //         buffer.set_text(
-    //             font_system,
-    //             &text,
-    //             &attrs,
-    //             glyphon::Shaping::Advanced,
-    //             Some(Self::to_cosmic_align(group.style.align)),
-    //         );
-
-    //         out.push(GlyphonGroup {
-    //             buffer,
-    //             left,
-    //             top,
-    //             buf_width,
-    //             color: group.style.color.to_array(),
-    //         });
-    //     }
-
-    //     out
-    // }
-
-
-    //  fn rebuild_groups(
-    //     &mut self,
-    //     font_system: &mut glyphon::FontSystem,
-    //     width: u32,
-    //     height: u32,
-    // ) -> Vec<GlyphonGroup> {
-    //     let mut out = Vec::with_capacity(self.params.groups.len());
-
-    //     for group in &self.params.groups {
-    //         if group.items.is_empty() { continue; }
-
-    //         let attrs = group.style.font.attrs();
-    //         let (text, left, top, item_width) = Self::compose_group_text(group);
-
-    //         // use item width for alignment, fall back to screen width
-    //         let buf_width = if item_width > 0.0 { item_width } else { width as f32 };
-
-    //         let mut buffer = glyphon::Buffer::new(
-    //             font_system,
-    //             glyphon::Metrics::new(group.style.font_size, group.style.line_height),
-    //         );
-
-    //         buffer.set_size(font_system, Some(buf_width), Some(height as f32));
-    //         buffer.set_text(
-    //             font_system,
-    //             &text,
-    //             &attrs,
-    //             glyphon::Shaping::Advanced,
-    //             Some(Self::to_cosmic_align(group.style.align)),
-    //         );
-
-    //         out.push(GlyphonGroup {
-    //             buffer,
-    //             left,
-    //             top,
-    //             color: group.style.color.to_array(),
-    //         });
-    //     }
-
-    //     out
-    // }
-
+  
     
 }
 

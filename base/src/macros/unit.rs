@@ -78,6 +78,18 @@ macro_rules! temperature_unit_macro {
                     $(Self::$variant => ($factor, $offset)),*
                 }
             }
+
+            /// Convert a temperature delta — factor only, no offset
+            pub fn to_base_delta(&self, val: f64, power: i8) -> f64 {
+                let (factor, _) = self.values();
+                val * factor.powi(power as i32)
+            }
+
+            /// Convert a temperature delta from SI — factor only, no offset
+            pub fn from_base_delta(&self, si_val: f64, power: i8) -> f64 {
+                let (factor, _) = self.values();
+                si_val / factor.powi(power as i32)
+            }
         }
 
         impl Unit for $name {

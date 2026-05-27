@@ -1,5 +1,7 @@
 
  
+use crate::unit::TemperatureUnit;
+
 use super::{
     MolarUnit, BaseUnit, CurrentUnit, LengthUnit, 
     LuminousIntensityUnit, MassUnit, TimeUnit, Unit
@@ -12,8 +14,9 @@ pub enum SimpleUnit {
     Mass        { unit: MassUnit,        exponent: i8 },
     Time        { unit: TimeUnit,        exponent: i8 }, 
     Current     { unit: CurrentUnit,     exponent: i8 },
-    Amount      { unit: MolarUnit,      exponent: i8 },
+    Molar      { unit: MolarUnit,      exponent: i8 },
     LuminousIntensity { unit: LuminousIntensityUnit, exponent: i8 },
+    Temperature { unit: TemperatureUnit, exponent: i8 },
 }
 
 
@@ -51,10 +54,10 @@ impl SimpleUnit {
 
  
     pub const fn molar_si() -> Self {
-        Self::Amount { unit: MolarUnit::DEFAULT, exponent: 1 }
+        Self::Molar { unit: MolarUnit::DEFAULT, exponent: 1 }
     }
     pub const fn molar(unit: MolarUnit, exponent: i8) -> Self {
-        Self::Amount { unit, exponent }
+        Self::Molar { unit, exponent }
     }
 
  
@@ -82,8 +85,9 @@ impl SimpleUnit {
             Self::Mass        { .. } => BaseUnit::Mass,
             Self::Time        { .. } => BaseUnit::Time, 
             Self::Current     { .. } => BaseUnit::Current,
-            Self::Amount      { .. } => BaseUnit::Molar,
+            Self::Molar      { .. } => BaseUnit::Molar,
             Self::LuminousIntensity { .. } => BaseUnit::LuminousIntensity,
+            Self::Temperature { .. } => BaseUnit::Temperature,
         }
     }
 
@@ -97,8 +101,9 @@ impl SimpleUnit {
             Self::Mass   { exponent, .. }      => *exponent,
             Self::Time   { exponent, .. }      => *exponent, 
             Self::Current     { exponent, .. } => *exponent,
-            Self::Amount      { exponent, .. } => *exponent,
+            Self::Molar      { exponent, .. } => *exponent,
             Self::LuminousIntensity { exponent, .. } => *exponent,
+            Self::Temperature { exponent, .. } => *exponent,
         }
     }
 
@@ -108,8 +113,9 @@ impl SimpleUnit {
             Self::Mass { unit, exponent } => unit.to_base(val, *exponent),
             Self::Time { unit, exponent } => unit.to_base(val, *exponent), 
             Self::Current { unit, exponent } => unit.to_base(val, *exponent),
-            Self::Amount { unit, exponent } => unit.to_base(val, *exponent),
+            Self::Molar { unit, exponent } => unit.to_base(val, *exponent),
             Self::LuminousIntensity { unit, exponent } => unit.to_base(val, *exponent),
+            Self::Temperature { unit, exponent } => unit.to_base_delta(val, *exponent),
         }
     }
 
@@ -119,8 +125,9 @@ impl SimpleUnit {
             Self::Mass { unit, exponent } => unit.from_base(val, *exponent),
             Self::Time { unit, exponent } => unit.from_base(val, *exponent), 
             Self::Current { unit, exponent } => unit.from_base(val, *exponent),
-            Self::Amount { unit, exponent } => unit.from_base(val, *exponent),
+            Self::Molar { unit, exponent } => unit.from_base(val, *exponent),
             Self::LuminousIntensity { unit, exponent } => unit.from_base(val, *exponent),
+            Self::Temperature { unit, exponent } => unit.from_base_delta(val, *exponent),
         }
     }
 
@@ -130,8 +137,9 @@ impl SimpleUnit {
             Self::Mass { unit, .. } => unit.symbol(),
             Self::Time { unit, .. } => unit.symbol(), 
             Self::Current { unit, .. } => unit.symbol(),
-            Self::Amount { unit, .. } => unit.symbol(),
+            Self::Molar { unit, .. } => unit.symbol(),
             Self::LuminousIntensity { unit, .. } => unit.symbol(),
+            Self::Temperature { unit, .. } => unit.symbol(),
         }
     }
 

@@ -1,4 +1,6 @@
  
+use crate::unit::TemperatureUnit;
+
 use super::{
     MolarUnit, BaseUnit, CurrentUnit, LengthUnit, LuminousIntensityUnit, 
     MassUnit, SimpleUnit, TimeUnit, Unit
@@ -7,7 +9,7 @@ use super::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CompoundUnit {
-    pub components: [SimpleUnit; BaseUnit::COUNT - 1], // BaseUnit::COUNT - 1 because we dont want temperature
+    pub components: [SimpleUnit; BaseUnit::COUNT],  
 }
 
 impl CompoundUnit {
@@ -19,8 +21,9 @@ impl CompoundUnit {
                 SimpleUnit::Mass   { unit: MassUnit::DEFAULT, exponent: 0 },
                 SimpleUnit::Time   { unit: TimeUnit::DEFAULT, exponent: 0 },
                 SimpleUnit::Current { unit: CurrentUnit::DEFAULT, exponent: 0 },
-                SimpleUnit::Amount  { unit: MolarUnit::DEFAULT, exponent: 0 },
+                SimpleUnit::Molar  { unit: MolarUnit::DEFAULT, exponent: 0 },
                 SimpleUnit::LuminousIntensity { unit: LuminousIntensityUnit::DEFAULT, exponent: 0 },
+                SimpleUnit::Temperature { unit: TemperatureUnit::DEFAULT, exponent: 0 },
             ],
         }
     }
@@ -48,14 +51,17 @@ impl CompoundUnit {
         self.with(SimpleUnit::Current { unit, exponent })
     } 
 
-    pub const fn with_amount(self, unit: MolarUnit, exponent: i8) -> Self {
-        self.with(SimpleUnit::Amount { unit, exponent })
+    pub const fn with_molar(self, unit: MolarUnit, exponent: i8) -> Self {
+        self.with(SimpleUnit::Molar { unit, exponent })
     }
  
     pub const fn with_luminous_intensity(self, unit: LuminousIntensityUnit, exponent: i8) -> Self {
         self.with(SimpleUnit::LuminousIntensity { unit, exponent })
     }
 
+     pub const fn with_temperature(self, unit: TemperatureUnit, exponent: i8) -> Self {
+        self.with(SimpleUnit::Temperature { unit, exponent })
+    }
 
     /// Convert a value from self to SI base units
     pub fn to_base(&self, val: f64) -> f64 {

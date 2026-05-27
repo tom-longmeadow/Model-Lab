@@ -13,19 +13,19 @@ pub use simple::*;
 pub use compound::*;
 pub use settings::*;
 
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_length;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_mass;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_time;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_current;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_molar;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_temperature;
-#[cfg(feature = "testing")]
+#[cfg(test)]
 pub mod test_compound;
 
 use crate::prelude::UnitConfig;

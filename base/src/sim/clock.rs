@@ -1,18 +1,39 @@
 
-/// Represents the tick and elapsed time counter for the simulation
+/// Represents the fixed-timestep clock for the simulation.
 pub struct Clock { 
-    tick: u64,
+    /// The total number of physics steps that have been executed.
+    tick: u64, 
+
+    /// The duration of each fixed physics step, in seconds.
     fixed_dt: f64,
+
+    /// The total simulated time elapsed, in seconds.
     elapsed_time: f64,
+
+    /// Accumulated real-world time waiting to be consumed as fixed steps.
     accumulator: f64,
+
+    /// Small time tolerance to avoid missing a step due to floating point error.
+    /// Derived from fixed_dt * epsilon_factor.
     epsilon: f64,
+
+    /// Maximum real-world frame time consumed per advance() call.
+    /// Caps the accumulator to prevent the simulation spiral of death
+    /// when a frame takes unusually long (e.g. debugger pause, tab switch).
+    max_frame_time: f64,
 }
 
 impl Clock {
 
-    pub const MAX_FRAME_TIME: f64 = 0.25;
-    pub const EPSILON_FACTOR: f64 = 0.01;
+    /// Default maximum frame time in seconds.
+    /// Caps the accumulator to prevent the spiral of death on long frames.
+    pub const DEFAULT_MAX_FRAME_TIME: f64 = 0.25;
 
+    /// Default epsilon as a fraction of fixed_dt.
+    /// Prevents floating point error from causing missed steps.
+    pub const DEFAULT_EPSILON_FACTOR: f64 = 0.01;
+
+    /// Creates a new clock running at `hz` physics steps per second.
     pub fn new(hz: f64) -> Self {
         assert!(hz > 0.0, "Clock hz must be positive");
         let fixed_dt = 1.0 / hz;
@@ -21,49 +42,85 @@ impl Clock {
             fixed_dt,
             elapsed_time: 0.0,
             accumulator: 0.0,
-            epsilon: fixed_dt * Self::EPSILON_FACTOR,
+            epsilon: fixed_dt * Self::DEFAULT_EPSILON_FACTOR,
+            max_frame_time: Self::DEFAULT_MAX_FRAME_TIME,
         }
     }
 
+    /// Total number of physics steps executed since creation.
     pub fn tick(&self) -> u64 {
         self.tick
     }
 
+    /// Total simulated time in seconds — sum of all fixed_dt steps taken.
     pub fn elapsed_time(&self) -> f64 {
         self.elapsed_time
     }
 
-    pub fn fixed_dt(&self) -> f64 {
-        self.fixed_dt
-    }
-
+    /// Remaining real-world time not yet consumed as a physics step.
+    /// Always in the range [0, fixed_dt).
     pub fn accumulator(&self) -> f64 {
         self.accumulator
     }
 
-    /// Feeds real-world time and returns the number of physics steps to run.
-    /// Includes a cap on frame_time 
-    pub fn advance(&mut self, frame_time: f64) -> u32 {  
+    /// Duration of each physics step in seconds.
+    pub fn fixed_dt(&self) -> f64 {
+        self.fixed_dt
+    }
 
-        self.accumulator += frame_time.min(Self::MAX_FRAME_TIME);  
+    /// Changes the physics step rate to `hz` steps per second.
+    /// Recalculates epsilon using the default epsilon factor.
+    pub fn set_fixed_dt(&mut self, hz: f64) {
+        assert!(hz > 0.0, "Clock hz must be positive");
+        self.fixed_dt = 1.0 / hz;
+        self.epsilon  = self.fixed_dt * Self::DEFAULT_EPSILON_FACTOR;
+    }
 
-        let mut steps = 0;
+    /// Time tolerance used to avoid missing a step due to floating point error.
+    /// Derived from fixed_dt * epsilon_factor.
+    pub fn epsilon(&self) -> f64 {
+        self.epsilon
+    }
+
+    /// Sets epsilon as a fraction of fixed_dt.
+    /// A factor of 0.01 means steps trigger when accumulator >= fixed_dt * 0.99.
+    pub fn set_epsilon(&mut self, factor: f64) {
+        assert!(factor > 0.0, "Epsilon factor must be positive");
+        self.epsilon = self.fixed_dt * factor;
+    }
+
+    /// Maximum real-world frame time consumed per advance() call, in seconds.
+    pub fn max_frame_time(&self) -> f64 {
+        self.max_frame_time
+    }
+
+    /// Sets the maximum frame time cap in seconds.
+    pub fn set_max_frame_time(&mut self, max: f64) {
+        assert!(max > 0.0, "Max frame time must be positive");
+        self.max_frame_time = max;
+    }
+
+    /// Feeds real-world elapsed time and returns the number of physics steps to run.
+    /// `frame_time` is capped at `max_frame_time` before being added to the accumulator.
+    pub fn advance(&mut self, frame_time: f64) -> u32 {
+        self.accumulator += frame_time.min(self.max_frame_time);
+
+        let mut steps = 0u32;
         while self.accumulator >= (self.fixed_dt - self.epsilon) {
-            self.accumulator -= self.fixed_dt;
+            self.accumulator  -= self.fixed_dt;
             self.elapsed_time += self.fixed_dt;
-            self.tick += 1;
-            steps += 1;
+            self.tick         += 1;
+            steps             += 1;
         }
         steps
     }
 
-    /// Returns 0.0 to 1.0 for visual smoothing between physics ticks.
+    /// Interpolation factor for render smoothing between physics ticks.
+    /// Returns a value in [0.0, 1.0] representing how far the accumulator
+    /// is through the current tick. Pass to lerp for smooth visual positions.
     pub fn alpha(&self) -> f64 {
         (self.accumulator / self.fixed_dt).clamp(0.0, 1.0)
     }
-
-   
-
 }
 
 
