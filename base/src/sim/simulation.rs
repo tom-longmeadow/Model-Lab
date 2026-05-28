@@ -69,8 +69,8 @@ where
 /********************/ 
  
 #[cfg(test)]
-mod tests {  
-    use super::*;   
+mod tests {
+    use super::*;
 
     // --- mock entity ---
     pub struct MockEntity {
@@ -84,9 +84,6 @@ mod tests {
     }
 
     impl MockStorage {
-        pub fn push(&mut self, item: MockEntity) {
-            self.data.push(item);
-        }
         pub fn get(&self, index: usize) -> &MockEntity {
             &self.data[index]
         }
@@ -100,6 +97,9 @@ mod tests {
         }
         fn len(&self)      -> usize { self.data.len() }
         fn capacity(&self) -> usize { self.data.capacity() }
+        fn push(&mut self, item: MockEntity)       { self.data.push(item); }
+        fn swap_remove(&mut self, i: usize) -> MockEntity { self.data.swap_remove(i) }
+        fn clear(&mut self)                        { self.data.clear(); }
     }
 
     // --- mock solver ---
@@ -142,7 +142,6 @@ mod tests {
 
     // --- mock creator ---
     pub struct MockCreator;
-
     impl Creator<MockStorage> for MockCreator {}
 
     // --- helpers ---
@@ -158,10 +157,10 @@ mod tests {
     #[test]
     fn test_initialization() {
         let sim = setup_sim();
-        assert_eq!(sim.storage.capacity(),        10);
-        assert_eq!(sim.clock().elapsed_time(),     0.0);
-        assert_eq!(sim.clock().fixed_dt(),         0.01);
-        assert_eq!(sim.clock().tick(),             0);
+        assert_eq!(sim.storage().capacity(),       10);
+        assert_eq!(sim.clock().elapsed_time(),      0.0);
+        assert_eq!(sim.clock().fixed_dt(),          0.01);
+        assert_eq!(sim.clock().tick(),              0);
     }
 
     #[test]
@@ -171,11 +170,11 @@ mod tests {
 
         sim.simulate(0.01);
 
-        assert_eq!(sim.solver.calls,          "prepare-sub-sub-finalize");
-        assert_eq!(sim.storage.capacity(),    10);
-        assert_eq!(sim.storage.len(),         1);
-        assert_eq!(sim.storage.get(0).d64,    e.d64);
-        assert_eq!(sim.storage.get(0).c8,     e.c8);
+        assert_eq!(sim.solver.calls,               "prepare-sub-sub-finalize");
+        assert_eq!(sim.storage().capacity(),        10);
+        assert_eq!(sim.storage().len(),             1);
+        assert_eq!(sim.storage().get(0).d64,        e.d64);
+        assert_eq!(sim.storage().get(0).c8,         e.c8);
     }
 
     #[test]
@@ -184,12 +183,12 @@ mod tests {
         let dt = sim.clock().fixed_dt();
 
         sim.simulate(dt);
-        assert_eq!(sim.clock().tick(),         1);
-        assert_eq!(sim.clock().elapsed_time(), dt);
+        assert_eq!(sim.clock().tick(),              1);
+        assert_eq!(sim.clock().elapsed_time(),      dt);
 
         sim.simulate(dt * 2.0);
-        assert_eq!(sim.clock().tick(),         3);
-        assert_eq!(sim.clock().elapsed_time(), dt * 3.0);
+        assert_eq!(sim.clock().tick(),              3);
+        assert_eq!(sim.clock().elapsed_time(),      dt * 3.0);
     }
 
     #[test]
@@ -198,13 +197,13 @@ mod tests {
         let dt = sim.clock().fixed_dt();
 
         sim.simulate(0.0);
-        assert_eq!(sim.clock().tick(),         0);
-        assert_eq!(sim.clock().elapsed_time(), 0.0);
+        assert_eq!(sim.clock().tick(),              0);
+        assert_eq!(sim.clock().elapsed_time(),      0.0);
 
         sim.solver.iteration_count = 0;
         sim.simulate(dt);
-        assert_eq!(sim.clock().tick(),         1);
-        assert_eq!(sim.clock().elapsed_time(), dt);
+        assert_eq!(sim.clock().tick(),              1);
+        assert_eq!(sim.clock().elapsed_time(),      dt);
     }
 
     #[test]
@@ -238,6 +237,6 @@ mod tests {
         let mut sim  = setup_sim();
         let dt_step  = sim.clock().fixed_dt();
         sim.simulate(dt_step * 2.1);
-        assert_eq!(sim.storage.len(), 2);
+        assert_eq!(sim.storage().len(), 2);
     }
 }

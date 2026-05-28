@@ -1,5 +1,5 @@
 use crate::sim::storage::Storage;
- 
+pub mod verlet;
 
 /// Advances simulation state by consuming fixed timesteps.
 /// Makes no assumptions about physics method, dimensionality,
@@ -26,4 +26,7 @@ pub trait Solver<S: Storage> {
     /// Use for post-solve corrections or diagnostics.
     fn post_step(&mut self, storage: &mut S);
 }
+
+
+
  
