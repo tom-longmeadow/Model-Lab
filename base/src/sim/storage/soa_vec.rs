@@ -82,11 +82,50 @@ impl<T: SoaLayout> Storage for SoaVecStorage<T> {
     }
 }
 
-impl<T: SoaLayout> SoaStorage for SoaVecStorage<T> {
-    fn col<C: 'static>(&self, index: usize) -> &[C] {
-        unsafe { self.col_raw::<C>(index) }
+impl<T: SoaLayout> SoaStorage for SoaVecStorage<T> {}
+
+/********************/ 
+/*      TESTS       */ 
+/********************/ 
+ 
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[derive(Default)]
+    pub struct MockEntity {
+        pub d64: f64,
+        pub c8:  u8,
     }
-    fn col_mut<C: 'static>(&mut self, index: usize) -> &mut [C] {
-        unsafe { self.col_raw_mut::<C>(index) }
+
+    impl SoaLayout for MockEntity {
+        const STRIDES: &'static [usize] = &[
+            std::mem::size_of::<f64>(),
+            std::mem::size_of::<u8>(),
+        ];
+
+        fn push_cols(&self, cols: &mut [Vec<u8>]) {
+            cols[0].extend_from_slice(&self.d64.to_ne_bytes());
+            cols[1].extend_from_slice(&self.c8.to_ne_bytes());
+        }
+
+        fn read_cols(cols: &[Vec<u8>], index: usize) -> Self {
+            let d64 = f64::from_ne_bytes(cols[0][index * 8..][..8].try_into().unwrap());
+            let c8  = cols[1][index];
+            Self { d64, c8 }
+        }
+
+        fn swap_remove_cols(cols: &mut [Vec<u8>], strides: &[usize], index: usize) {
+            for (col, &stride) in cols.iter_mut().zip(strides.iter()) {
+                let last_start = col.len() - stride;
+                let tgt_start  = index * stride;
+                col.copy_within(last_start.., tgt_start);
+                col.truncate(last_start);
+            }
+        }
     }
+
+    crate::test_storage!(SoaVecStorage<MockEntity>, MockEntity);
+
 }

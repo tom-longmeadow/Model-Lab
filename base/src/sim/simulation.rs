@@ -46,9 +46,9 @@ where
 
             self.solver.pre_step(&mut self.storage, dt, current_tick);
             for _ in 0..subs {
-                self.solver.substep(&mut self.storage, dt);
+                self.solver.sub_step(&mut self.storage, dt);
             }
-            self.solver.post_step(&mut self.storage);
+            self.solver.post_step(&mut self.storage, dt);
 
             self.storage.post_step();
         }
@@ -70,6 +70,8 @@ where
  
 #[cfg(test)]
 mod tests {
+    use crate::sim::storage::{AosStorage, aos_vec::AosVecStorage};
+
     use super::*;
 
     // --- mock entity ---
@@ -79,29 +81,8 @@ mod tests {
     }
 
     // --- mock storage ---
-    pub struct MockStorage {
-        data: Vec<MockEntity>,
-    }
-
-    impl MockStorage {
-        pub fn get(&self, index: usize) -> &MockEntity {
-            &self.data[index]
-        }
-    }
-
-    impl Storage for MockStorage {
-        type Item = MockEntity;
-
-        fn new(capacity: usize) -> Self {
-            Self { data: Vec::with_capacity(capacity) }
-        }
-        fn len(&self)      -> usize { self.data.len() }
-        fn capacity(&self) -> usize { self.data.capacity() }
-        fn push(&mut self, item: MockEntity)       { self.data.push(item); }
-        fn swap_remove(&mut self, i: usize) -> MockEntity { self.data.swap_remove(i) }
-        fn clear(&mut self)                        { self.data.clear(); }
-    }
-
+    pub type MockStorage = AosVecStorage<MockEntity>;
+     
     // --- mock solver ---
     pub struct MockSolver {
         pub calls:           String,
@@ -130,12 +111,12 @@ mod tests {
             storage.push(setup_entity1());
         }
 
-        fn substep(&mut self, _: &mut MockStorage, dt: f64) {
+        fn sub_step(&mut self, _: &mut MockStorage, dt: f64) {
             self.calls.push_str("sub-");
             self.received_dts.push(dt);
         }
 
-        fn post_step(&mut self, _: &mut MockStorage) {
+        fn post_step(&mut self, _: &mut MockStorage, dt: f64) {
             self.calls.push_str("finalize");
         }
     }
