@@ -80,12 +80,12 @@ pub trait Particle<const N: usize> {
 }
 
 /// Extends [`Particle`] with explicit velocity.
-/// Required by [`NewtonianVerlet`] and [`Leapfrog`] integrators.
+/// Required by [`SymplecticEuler`] and [`Leapfrog`] integrators.
 /// Returns references — zero-copy, direct in-place modification by integrators.
 pub trait NewtonianParticle<const N: usize>: Particle<N> {
     fn vel(&self) -> &[f64; N];
 
-    /// Returns `(pos_mut, vel_mut, acc)` — disjoint, used by [`NewtonianVerlet`].
+    /// Returns `(pos_mut, vel_mut, acc)` — disjoint, used by [`SymplecticEuler`].
     fn pos_vel_mut_acc(&mut self) -> (&mut [f64; N], &mut [f64; N], &[f64; N]);
 
     /// Returns `(vel_mut, acc)` — disjoint, used by [`Leapfrog`] half-kick.
@@ -119,8 +119,8 @@ pub trait VerletParticle<const N: usize>: Particle<N> {
 
 /// Newtonian (velocity) Verlet: `vel += acc * dt`, `pos += vel * dt`.
 /// Requires [`NewtonianParticle<N>`] — needs explicit velocity.
-pub struct NewtonianVerlet;
-impl NewtonianVerlet {
+pub struct SymplecticEuler;
+impl SymplecticEuler {
     #[inline(always)]
     pub fn step_scalar<const N: usize>(
         pos: &mut [f64; N], vel: &mut [f64; N], acc: &[f64; N], dt: f64,
@@ -169,7 +169,7 @@ impl Verlet {
 /// Leapfrog (symplectic). Split into half-kick and drift.
 /// Requires [`NewtonianParticle<N>`] — needs explicit velocity.
 /// Sequence per substep: `half_kick` → `drift` → recompute forces → `half_kick`
-/// Conserves energy better than [`NewtonianVerlet`] over long runs.
+/// Conserves energy better than [`SymplecticEuler`] over long runs.
 pub struct Leapfrog;
 impl Leapfrog {
     #[inline(always)]
@@ -193,6 +193,50 @@ impl Leapfrog {
     }
 }
 
+/// Velocity Verlet (2nd-order, symplectic). Split into two half-kicks around a force recompute.
+/// Requires [`NewtonianParticle<N>`] — needs explicit velocity.
+///
+/// Sequence per substep:
+/// 1. `pos += vel·dt + ½·acc·dt²`  and  `vel += ½·acc·dt`   (using *current* acc)
+/// 2. recompute forces at new positions
+/// 3. `vel += ½·acc_new·dt`                                  (using *new* acc)
+///
+/// No `acc_old` field needed — the particle's `acc` field is current before
+/// `model.pre()` and new afterwards. 2nd-order accuracy; conserves energy
+/// over long runs like [`Leapfrog`], but directly yields velocity at each step.
+pub struct VelocityVerlet;
+impl VelocityVerlet {
+    /// Step 1 — position update + first half vel-kick using current `acc`.
+    #[inline(always)]
+    pub fn step1_scalar<const N: usize>(
+        pos: &mut [f64; N], vel: &mut [f64; N], acc: &[f64; N], dt: f64,
+    ) {
+        for i in 0..N {
+            pos[i] += vel[i] * dt + 0.5 * acc[i] * dt * dt;
+            vel[i] += 0.5 * acc[i] * dt;
+        }
+    }
+
+    /// Step 2 — second half vel-kick using freshly recomputed `acc`.
+    #[inline(always)]
+    pub fn step2_scalar<const N: usize>(vel: &mut [f64; N], acc: &[f64; N], dt: f64) {
+        for i in 0..N { vel[i] += 0.5 * acc[i] * dt; }
+    }
+
+    #[inline(always)]
+    pub fn step1_slice(pos: &mut [f64], vel: &mut [f64], acc: &[f64], dt: f64) {
+        for i in 0..pos.len() {
+            pos[i] += vel[i] * dt + 0.5 * acc[i] * dt * dt;
+            vel[i] += 0.5 * acc[i] * dt;
+        }
+    }
+
+    #[inline(always)]
+    pub fn step2_slice(vel: &mut [f64], acc: &[f64], dt: f64) {
+        for i in 0..vel.len() { vel[i] += 0.5 * acc[i] * dt; }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Solver marker traits
 // ---------------------------------------------------------------------------
@@ -213,9 +257,9 @@ pub trait AosStepSolver<S: AosStorage>: StepModelSolver<S> {}
 /// Data is modified in place through column slices — compiler can auto-vectorize.
 pub trait SoaStepSolver<S: SoaStorage>: StepModelSolver<S> {}
 
-/// A solver using [`NewtonianVerlet`] integration.
+/// A solver using [`SymplecticEuler`] integration.
 /// Items must provide [`NewtonianParticle<N>`].
-pub trait NewtonianSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
+pub trait SymplecticEulerSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
 
 /// A solver using [`Verlet`] integration.
 /// Items must provide [`VerletParticle<N>`].
@@ -223,8 +267,13 @@ pub trait VerletSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
 
 /// A solver using [`Leapfrog`] integration.
 /// Items must provide [`NewtonianParticle<N>`].
-/// Symplectic — conserves energy better than [`NewtonianVerlet`] over long runs.
+/// Symplectic — conserves energy better than [`SymplecticEuler`] over long runs.
 pub trait LeapfrogSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
+
+/// A solver using [`VelocityVerlet`] integration.
+/// Items must provide [`NewtonianParticle<N>`].
+/// 2nd-order symplectic — conserves energy and directly yields velocity at each step.
+pub trait VelocityVerletSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
 
 // ---------------------------------------------------------------------------
 // AosSolver
@@ -232,11 +281,11 @@ pub trait LeapfrogSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
 
 /// Concrete AoS solver.
 /// - `M` — the [`StepModel`], use [`chain!`] to compose: `chain!(ClearAcc, Gravity, Drag)`
-/// - `I` — the integrator: [`NewtonianVerlet`], [`Verlet`], [`Leapfrog`]
+/// - `I` — the integrator: [`SymplecticEuler`], [`Verlet`], [`Leapfrog`]
 /// - `N` — spatial dimension
 ///
 /// `sub_step` modifies particle data in place through references — zero copying.
-/// One struct satisfies [`NewtonianSolver`], [`VerletSolver`], or [`LeapfrogSolver`]
+/// One struct satisfies [`SymplecticEulerSolver`], [`VerletSolver`], or [`LeapfrogSolver`]
 /// automatically based on `I` and the item type of `S`.
 pub struct AosSolver<M, I, const N: usize> {
     pub model:   M,
@@ -247,7 +296,7 @@ impl<M, I, const N: usize> AosSolver<M, I, N> {
     pub fn new(model: M) -> Self { Self { model, _integrator: PhantomData } }
 }
 
-impl<S, M, const N: usize> Solver<S> for AosSolver<M, NewtonianVerlet, N>
+impl<S, M, const N: usize> Solver<S> for AosSolver<M, SymplecticEuler, N>
 where
     S: AosStorage,
     M: StepModel<S>,
@@ -259,7 +308,7 @@ where
         self.model.pre(storage, dt);
         for item in storage.iter_mut() {
             let (pos, vel, acc) = item.pos_vel_mut_acc();
-            NewtonianVerlet::step_scalar(pos, vel, acc, dt);
+            SymplecticEuler::step_scalar(pos, vel, acc, dt);
         }
         self.model.post(storage, dt);
     }
@@ -327,7 +376,7 @@ where
     AosSolver<M, I, N>: Solver<S> + StepModelSolver<S>,
 {}
 
-impl<S, M, const N: usize> NewtonianSolver<S, N> for AosSolver<M, NewtonianVerlet, N>
+impl<S, M, const N: usize> SymplecticEulerSolver<S, N> for AosSolver<M, SymplecticEuler, N>
 where
     S: AosStorage,
     M: StepModel<S>,
@@ -348,13 +397,45 @@ where
     S::Item: NewtonianParticle<N>,
 {}
 
+impl<S, M, const N: usize> Solver<S> for AosSolver<M, VelocityVerlet, N>
+where
+    S: AosStorage,
+    M: StepModel<S>,
+    S::Item: NewtonianParticle<N>,
+{
+    fn init(&mut self, storage: &mut S) { self.model.pre(storage, 0.0); }
+
+    fn sub_step(&mut self, storage: &mut S, dt: f64) {
+        // step 1 — pos update + first half vel-kick using current acc
+        for item in storage.iter_mut() {
+            let (pos, vel, acc) = item.pos_vel_mut_acc();
+            VelocityVerlet::step1_scalar(pos, vel, acc, dt);
+        }
+        // recompute forces at new positions
+        self.model.pre(storage, dt);
+        // step 2 — second half vel-kick using new acc
+        for item in storage.iter_mut() {
+            let (vel, acc) = item.vel_mut_acc();
+            VelocityVerlet::step2_scalar(vel, acc, dt);
+        }
+        self.model.post(storage, dt);
+    }
+}
+
+impl<S, M, const N: usize> VelocityVerletSolver<S, N> for AosSolver<M, VelocityVerlet, N>
+where
+    S: AosStorage,
+    M: StepModel<S>,
+    S::Item: NewtonianParticle<N>,
+{}
+
 // ---------------------------------------------------------------------------
 // SoaSolver
 // ---------------------------------------------------------------------------
 
 /// Concrete SoA solver.
 /// - `M` — the [`StepModel`], use [`chain!`] to compose: `chain!(ClearAcc, Gravity, Drag)`
-/// - `I` — the integrator: [`NewtonianVerlet`], [`Verlet`], [`Leapfrog`]
+/// - `I` — the integrator: [`SymplecticEuler`], [`Verlet`], [`Leapfrog`]
 /// - `N` — spatial dimension (used for marker trait bounds, implicit in column stride)
 ///
 /// `sub_step` calls slice-form integrators directly on column slices — zero copying.
@@ -368,7 +449,7 @@ impl<M, I, const N: usize> SoaSolver<M, I, N> {
     pub fn new(model: M) -> Self { Self { model, _integrator: PhantomData } }
 }
 
-impl<S, M, const N: usize> Solver<S> for SoaSolver<M, NewtonianVerlet, N>
+impl<S, M, const N: usize> Solver<S> for SoaSolver<M, SymplecticEuler, N>
 where
     S: SoaStorage + SoaNewtonianStorage,
     M: StepModel<S>,
@@ -378,7 +459,7 @@ where
     fn sub_step(&mut self, storage: &mut S, dt: f64) {
         self.model.pre(storage, dt);
         let (pos, vel, acc) = storage.pos_vel_mut_acc();
-        NewtonianVerlet::step_slice(pos, vel, acc, dt);
+        SymplecticEuler::step_slice(pos, vel, acc, dt);
         self.model.post(storage, dt);
     }
 }
@@ -434,7 +515,7 @@ where
     SoaSolver<M, I, N>: Solver<S> + StepModelSolver<S>,
 {}
 
-impl<S, M, const N: usize> NewtonianSolver<S, N> for SoaSolver<M, NewtonianVerlet, N>
+impl<S, M, const N: usize> SymplecticEulerSolver<S, N> for SoaSolver<M, SymplecticEuler, N>
 where
     S: SoaStorage + SoaNewtonianStorage,
     M: StepModel<S>,
@@ -447,6 +528,32 @@ where
 {}
 
 impl<S, M, const N: usize> LeapfrogSolver<S, N> for SoaSolver<M, Leapfrog, N>
+where
+    S: SoaStorage + SoaNewtonianStorage,
+    M: StepModel<S>,
+{}
+
+impl<S, M, const N: usize> Solver<S> for SoaSolver<M, VelocityVerlet, N>
+where
+    S: SoaStorage + SoaNewtonianStorage,
+    M: StepModel<S>,
+{
+    fn init(&mut self, storage: &mut S) { self.model.pre(storage, 0.0); }
+
+    fn sub_step(&mut self, storage: &mut S, dt: f64) {
+        // step 1 — pos update + first half vel-kick using current acc
+        let (pos, vel, acc) = storage.pos_vel_mut_acc();
+        VelocityVerlet::step1_slice(pos, vel, acc, dt);
+        // recompute forces at new positions
+        self.model.pre(storage, dt);
+        // step 2 — second half vel-kick using new acc
+        let (vel, acc) = storage.vel_mut_acc();
+        VelocityVerlet::step2_slice(vel, acc, dt);
+        self.model.post(storage, dt);
+    }
+}
+
+impl<S, M, const N: usize> VelocityVerletSolver<S, N> for SoaSolver<M, VelocityVerlet, N>
 where
     S: SoaStorage + SoaNewtonianStorage,
     M: StepModel<S>,

@@ -61,7 +61,7 @@ pub trait AosStorage: Storage {
 pub trait SoaStorage: Storage {}
 
 /// [`SoaStorage`] with `pos`, `vel`, `acc` columns.
-/// Required by [`NewtonianVerlet`] and [`Leapfrog`] solvers.
+/// Required by [`SymplecticEuler`] and [`Leapfrog`] solvers.
 ///
 /// Column layout: blocked — all x values, then all y values etc.
 /// i.e. `pos = [x0, x1, ..., y0, y1, ...]` — not interleaved.
@@ -75,7 +75,7 @@ pub trait SoaNewtonianStorage: SoaStorage {
     fn vel(&self) -> &[f64];
     fn acc(&self) -> &[f64];
 
-    /// Returns `(pos_mut, vel_mut, acc)` — disjoint, used by [`NewtonianVerlet`].
+    /// Returns `(pos_mut, vel_mut, acc)` — disjoint, used by [`SymplecticEuler`].
     fn pos_vel_mut_acc(&mut self) -> (&mut [f64], &mut [f64], &[f64]);
 
     /// Returns `(vel_mut, acc)` — disjoint, used by [`Leapfrog`] half-kick.
