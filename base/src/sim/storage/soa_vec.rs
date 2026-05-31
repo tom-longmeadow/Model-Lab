@@ -1,26 +1,12 @@
-use crate::sim::storage::{SoaStorage, Storage};
+use crate::sim::storage::{SoaLayout, SoaStorage, Storage};
 
-/// Describes the column layout of a type that can live in SoaVecStorage.
-/// Implement this on your entity struct — not on the storage.
-pub trait SoaLayout: Sized {
-    /// Byte stride of each column — one entry per field.
-    const STRIDES: &'static [usize];
-
-    /// Push all fields into their respective byte columns.
-    fn push_cols(&self, cols: &mut [Vec<u8>]);
-
-    /// Reconstruct Self from byte columns at index.
-    fn read_cols(cols: &[Vec<u8>], index: usize) -> Self;
-
-    /// Swap-remove at index — keeps all columns in sync.
-    fn swap_remove_cols(cols: &mut [Vec<u8>], strides: &[usize], index: usize);
-}
-
-/// Generic Struct-of-Arrays storage.
-/// T declares its own column layout via SoaLayout.
+/// Generic CPU-side Struct-of-Arrays storage backed by `Vec<u8>` byte columns.
+/// `T` declares its own column layout via [`SoaLayout`].
 /// Storage manages raw byte columns — knows nothing about field semantics.
+/// Typed safe column access lives in the physics sub-traits
+/// ([`SoaNewtonianStorage`], [`SoaVerletStorage`]).
 pub struct SoaVecStorage<T: SoaLayout> {
-    /// One Vec<u8> per field — length is len * stride for that column.
+    /// One `Vec<u8>` per field — length is `len * stride` for that column.
     columns:  Vec<Vec<u8>>,
     strides:  Vec<usize>,
     len:      usize,
@@ -29,21 +15,31 @@ pub struct SoaVecStorage<T: SoaLayout> {
 }
 
 impl<T: SoaLayout> SoaVecStorage<T> {
-    /// Direct column slice — use for SIMD.
-    /// SAFETY: caller must request the correct C for the column index.
-    /// Use the col:: constants defined on the entity type to uphold this.
-   pub unsafe fn col_raw<C>(&self, col: usize) -> &[C] {
+    /// Typed immutable slice over one byte column.
+    ///
+    /// # Safety
+    /// `C` must match the actual element type for `col`.
+    /// Only called from physics sub-trait impls which know the correct type.
+    #[allow(dead_code)]
+    pub(crate) unsafe fn col_raw<C>(&self, col: usize) -> &[C] {
         let bytes = &self.columns[col];
-        // SAFETY: caller must request the correct C for the column index.
         unsafe {
-            std::slice::from_raw_parts(bytes.as_ptr() as *const C, bytes.len() / self.strides[col])
+            std::slice::from_raw_parts(
+                bytes.as_ptr() as *const C,
+                bytes.len() / self.strides[col],
+            )
         }
     }
 
-   pub unsafe fn col_raw_mut<C>(&mut self, col: usize) -> &mut [C] {
+    /// Typed mutable slice over one byte column.
+    ///
+    /// # Safety
+    /// `C` must match the actual element type for `col`.
+    /// Only called from physics sub-trait impls which know the correct type.
+    #[allow(dead_code)]
+    pub(crate) unsafe fn col_raw_mut<C>(&mut self, col: usize) -> &mut [C] {
         let len   = self.columns[col].len() / self.strides[col];
         let bytes = &mut self.columns[col];
-        // SAFETY: caller must request the correct C for the column index.
         unsafe {
             std::slice::from_raw_parts_mut(bytes.as_mut_ptr() as *mut C, len)
         }
@@ -84,16 +80,16 @@ impl<T: SoaLayout> Storage for SoaVecStorage<T> {
 
 impl<T: SoaLayout> SoaStorage for SoaVecStorage<T> {}
 
-/********************/ 
-/*      TESTS       */ 
-/********************/ 
- 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
-
+    use crate::sim::storage::SoaLayout;
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Default, PartialEq, Debug)]
     pub struct MockEntity {
         pub d64: f64,
         pub c8:  u8,
@@ -128,4 +124,27 @@ mod tests {
 
     crate::test_storage!(SoaVecStorage<MockEntity>, MockEntity);
 
+    #[test]
+    fn round_trip_push_read() {
+        let mut s = SoaVecStorage::<MockEntity>::new(4);
+        s.push(MockEntity { d64: 1.5, c8: 10 });
+        s.push(MockEntity { d64: 2.5, c8: 20 });
+        assert_eq!(s.len(), 2);
+        let item = MockEntity::read_cols(&s.columns, 1);
+        assert_eq!(item, MockEntity { d64: 2.5, c8: 20 });
+    }
+
+    #[test]
+    fn swap_remove_keeps_data_consistent() {
+        let mut s = SoaVecStorage::<MockEntity>::new(4);
+        s.push(MockEntity { d64: 1.0, c8: 1 });
+        s.push(MockEntity { d64: 2.0, c8: 2 });
+        s.push(MockEntity { d64: 3.0, c8: 3 });
+        let removed = s.swap_remove(0);
+        assert_eq!(removed, MockEntity { d64: 1.0, c8: 1 });
+        assert_eq!(s.len(), 2);
+        // last item moved to slot 0
+        let new_first = MockEntity::read_cols(&s.columns, 0);
+        assert_eq!(new_first, MockEntity { d64: 3.0, c8: 3 });
+    }
 }

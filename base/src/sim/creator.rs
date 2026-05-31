@@ -1,3 +1,4 @@
+pub mod particle;
 use crate::sim::storage::Storage;
 
 /// Controls how and when new state enters the simulation.

@@ -1,11 +1,10 @@
+pub mod newtonian;
+pub mod verlet;
 pub mod step_model;
-pub mod particle;
 pub mod integrator;
-pub mod aos_solver;
-pub mod soa_solver;
 
-use std::marker::PhantomData;
-use crate::sim::storage::{Storage, AosStorage, SoaStorage, SoaNewtonianStorage, SoaVerletStorage};
+ 
+use crate::sim::storage::{Storage};
 
  
 /// Loop contract only. No physics assumptions. No layout assumptions.
@@ -22,11 +21,16 @@ pub trait Solver<S: Storage> {
 }
  
 
-/// Universal behavior slot — runs against the whole storage before and after integration.
-/// Forces, constraints, advection, behaviour — all implement this.
-/// Layout-agnostic: works with [`AosStorage`] and [`SoaStorage`].
-/// - `pre()`  — before integration: forces, advection, behaviour
-/// - `post()` — after  integration: constraints, pressure, leapfrog second half-kick
+/// Behavior applied before and after each integration step.
+///
+/// Forces, constraints, advection, and any other per-step logic all implement this trait.
+/// Layout-agnostic — works with both [`AosStorage`] and [`SoaStorage`].
+/// Compose multiple behaviors with [`chain!`] at zero cost.
+///
+/// | Hook | Runs | Typical uses |
+/// |------|------|--------------|
+/// | `pre`  | before integration | clear acc, accumulate forces, advection |
+/// | `post` | after  integration | clamp positions, resolve contacts, joint limits |
 pub trait StepModel<S: Storage> {
     fn pre(&mut self,  _storage: &mut S, _dt: f64) {}
     fn post(&mut self, _storage: &mut S, _dt: f64) {}
@@ -38,23 +42,5 @@ pub trait StepModelSolver<S: Storage>: Solver<S> {
     fn model(&mut self) -> &mut Self::Model;
 }
 
-
-/// A solver using [`SymplecticEuler`] integration.
-/// Items must provide [`NewtonianParticle<N>`].
-pub trait SymplecticEulerSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
-
-/// A solver using [`Verlet`] integration.
-/// Items must provide [`VerletParticle<N>`].
-pub trait VerletSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
-
-/// A solver using [`Leapfrog`] integration.
-/// Items must provide [`NewtonianParticle<N>`].
-/// Symplectic — conserves energy better than [`SymplecticEuler`] over long runs.
-pub trait LeapfrogSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
-
-/// A solver using [`VelocityVerlet`] integration.
-/// Items must provide [`NewtonianParticle<N>`].
-/// 2nd-order symplectic — conserves energy and directly yields velocity at each step.
-pub trait VelocityVerletSolver<S: Storage, const N: usize>: StepModelSolver<S> {}
 
 

@@ -1,5 +1,10 @@
+pub mod newtonian;
+pub mod verlet;
 pub mod aos_vec;
 pub mod soa_vec;
+
+pub use aos_vec::AosVecStorage;
+pub use soa_vec::SoaVecStorage;
 
 /// Represents any simulation storage.
 /// Makes no assumptions about memory layout, threading,
@@ -60,42 +65,22 @@ pub trait AosStorage: Storage {
 /// field type at compile time.
 pub trait SoaStorage: Storage {}
 
-/// [`SoaStorage`] with `pos`, `vel`, `acc` columns.
-/// Required by [`SymplecticEuler`] and [`Leapfrog`] solvers.
-///
-/// Column layout: blocked — all x values, then all y values etc.
-/// i.e. `pos = [x0, x1, ..., y0, y1, ...]` — not interleaved.
-///
-/// Only combined accessors are exposed. Individual `_mut` accessors cannot
-/// be called simultaneously under Rust's borrow rules and are therefore not
-/// part of the API. Implementations prove disjointness via direct field
-/// access or `split_at_mut`.
-pub trait SoaNewtonianStorage: SoaStorage {
-    fn pos(&self) -> &[f64];
-    fn vel(&self) -> &[f64];
-    fn acc(&self) -> &[f64];
+/// Describes the column layout of a type that can live in SoA storage.
+/// Implement this on your entity struct — not on the storage.
+/// The storage impl uses this to manage raw byte columns; it knows nothing
+/// about field semantics. Typed safe accessors live in the physics sub-traits.
+pub trait SoaLayout: Sized {
+    /// Byte stride of each column — one entry per field.
+    const STRIDES: &'static [usize];
 
-    /// Returns `(pos_mut, vel_mut, acc)` — disjoint, used by [`SymplecticEuler`].
-    fn pos_vel_mut_acc(&mut self) -> (&mut [f64], &mut [f64], &[f64]);
+    /// Push all fields into their respective byte columns.
+    fn push_cols(&self, cols: &mut [Vec<u8>]);
 
-    /// Returns `(vel_mut, acc)` — disjoint, used by [`Leapfrog`] half-kick.
-    fn vel_mut_acc(&mut self) -> (&mut [f64], &[f64]);
+    /// Reconstruct `Self` from byte columns at `index`.
+    fn read_cols(cols: &[Vec<u8>], index: usize) -> Self;
 
-    /// Returns `(pos_mut, vel)` — disjoint, used by [`Leapfrog`] drift.
-    fn pos_mut_vel(&mut self) -> (&mut [f64], &[f64]);
-}
-
-/// [`SoaStorage`] with `pos`, `pos_old`, `acc` columns.
-/// Required by the [`Verlet`] solver.
-///
-/// Column layout: blocked — all x values, then all y values etc.
-pub trait SoaVerletStorage: SoaStorage {
-    fn pos(&self)     -> &[f64];
-    fn pos_old(&self) -> &[f64];
-    fn acc(&self)     -> &[f64];
-
-    /// Returns `(pos_mut, pos_old_mut, acc)` — disjoint, used by [`Verlet`].
-    fn pos_pos_old_mut_acc(&mut self) -> (&mut [f64], &mut [f64], &[f64]);
+    /// Swap-remove at `index` — keeps all columns in sync.
+    fn swap_remove_cols(cols: &mut [Vec<u8>], strides: &[usize], index: usize);
 }
 
 // ---------------------------------------------------------------------------
@@ -231,134 +216,6 @@ macro_rules! test_aos_storage {
                 s.push(<$item>::default());
                 s.clear();
                 assert!(s.as_slice().is_empty());
-            }
-        }
-    };
-}
-
-/// Tests the [`SoaNewtonianStorage`] contract.
-/// `$a` and `$b` are two distinct `$item` values.
-#[macro_export]
-macro_rules! test_soa_newtonian_storage {
-    ($storage:ty, $item:ty, $a:expr, $b:expr) => {
-        #[cfg(test)]
-        mod soa_newtonian_storage_tests {
-            use super::*;
-
-            #[test]
-            fn pos_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.pos().len(), s.len());
-            }
-
-            #[test]
-            fn vel_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.vel().len(), s.len());
-            }
-
-            #[test]
-            fn acc_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.acc().len(), s.len());
-            }
-
-            #[test]
-            fn pos_vel_mut_acc_lengths_match() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                let (pos, vel, acc) = s.pos_vel_mut_acc();
-                assert_eq!(pos.len(), vel.len());
-                assert_eq!(vel.len(), acc.len());
-            }
-
-            #[test]
-            fn vel_mut_acc_lengths_match() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                let (vel, acc) = s.vel_mut_acc();
-                assert_eq!(vel.len(), acc.len());
-            }
-
-            #[test]
-            fn pos_mut_vel_lengths_match() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                let (pos, vel) = s.pos_mut_vel();
-                assert_eq!(pos.len(), vel.len());
-            }
-
-            #[test]
-            fn clear_empties_columns() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.clear();
-                assert!(s.pos().is_empty());
-                assert!(s.vel().is_empty());
-                assert!(s.acc().is_empty());
-            }
-        }
-    };
-}
-
-/// Tests the [`SoaVerletStorage`] contract.
-/// `$a` and `$b` are two distinct `$item` values.
-#[macro_export]
-macro_rules! test_soa_verlet_storage {
-    ($storage:ty, $item:ty, $a:expr, $b:expr) => {
-        #[cfg(test)]
-        mod soa_verlet_storage_tests {
-            use super::*;
-
-            #[test]
-            fn pos_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.pos().len(), s.len());
-            }
-
-            #[test]
-            fn pos_old_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.pos_old().len(), s.len());
-            }
-
-            #[test]
-            fn acc_len_matches_storage_len() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                assert_eq!(s.acc().len(), s.len());
-            }
-
-            #[test]
-            fn pos_pos_old_mut_acc_lengths_match() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.push(<$item>::default());
-                let (pos, pos_old, acc) = s.pos_pos_old_mut_acc();
-                assert_eq!(pos.len(), pos_old.len());
-                assert_eq!(pos_old.len(), acc.len());
-            }
-
-            #[test]
-            fn clear_empties_columns() {
-                let mut s = <$storage>::new(10);
-                s.push(<$item>::default());
-                s.clear();
-                assert!(s.pos().is_empty());
-                assert!(s.pos_old().is_empty());
-                assert!(s.acc().is_empty());
             }
         }
     };
