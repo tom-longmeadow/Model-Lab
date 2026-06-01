@@ -44,6 +44,35 @@ impl<T: SoaLayout> SoaVecStorage<T> {
             std::slice::from_raw_parts_mut(bytes.as_mut_ptr() as *mut C, len)
         }
     }
+
+    /// Borrow columns `a` and `b` mutably and column `c` immutably in one call.
+    /// All three indices must be distinct.
+    ///
+    /// # Safety
+    /// `C` must match the actual element type for all three columns.
+    /// `a`, `b`, `c` must be distinct valid column indices.
+    #[allow(dead_code)]
+    pub(crate) unsafe fn col3_mut_mut_ref<C>(
+        &mut self,
+        a: usize, // mutable
+        b: usize, // mutable
+        c: usize, // immutable
+    ) -> (&mut [C], &mut [C], &[C]) {
+        debug_assert!(a != b && a != c && b != c, "col3_mut_mut_ref: indices must be distinct");
+        let ptr = self.columns.as_mut_ptr();
+        // SAFETY: a, b, c are distinct so the three borrows don't alias.
+        let col_a = unsafe { &mut *ptr.add(a) };
+        let col_b = unsafe { &mut *ptr.add(b) };
+        let col_c = unsafe { &*ptr.add(c) };
+        let len_a = col_a.len() / self.strides[a];
+        let len_b = col_b.len() / self.strides[b];
+        let len_c = col_c.len() / self.strides[c];
+        unsafe {(
+            std::slice::from_raw_parts_mut(col_a.as_mut_ptr() as *mut C, len_a),
+            std::slice::from_raw_parts_mut(col_b.as_mut_ptr() as *mut C, len_b),
+            std::slice::from_raw_parts    (col_c.as_ptr()     as *const C, len_c),
+        )}
+    }
 }
 
 impl<T: SoaLayout> Storage for SoaVecStorage<T> {

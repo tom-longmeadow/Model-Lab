@@ -1,4 +1,32 @@
-use crate::sim::storage::SoaStorage;
+use crate::sim::storage::{SoaLayout, SoaStorage, soa_vec::SoaVecStorage};
+
+/// Marks a [`SoaLayout`] type whose column order is:
+/// `[pos_0, …, pos_{N-1}, pos_old_0, …, pos_old_{N-1}, acc_0, …, acc_{N-1}]`
+/// with `N` components per field and `f64` element type.
+///
+/// Implementing this on your particle type automatically provides
+/// [`SoaVerletStorage`] for `SoaVecStorage<Self>`.
+pub trait SoaVerletLayout: SoaLayout {
+    const N: usize;
+}
+
+impl<T: SoaVerletLayout> SoaVerletStorage for SoaVecStorage<T> {
+    fn pos_col(&self, c: usize) -> &[f64] {
+        unsafe { self.col_raw::<f64>(c) }
+    }
+    fn pos_old_col(&self, c: usize) -> &[f64] {
+        unsafe { self.col_raw::<f64>(T::N + c) }
+    }
+    fn acc_col(&self, c: usize) -> &[f64] {
+        unsafe { self.col_raw::<f64>(T::N * 2 + c) }
+    }
+    fn acc_col_mut(&mut self, c: usize) -> &mut [f64] {
+        unsafe { self.col_raw_mut::<f64>(T::N * 2 + c) }
+    }
+    fn pos_pos_old_col_mut_acc(&mut self, c: usize) -> (&mut [f64], &mut [f64], &[f64]) {
+        unsafe { self.col3_mut_mut_ref::<f64>(c, T::N + c, T::N * 2 + c) }
+    }
+}
 
 /// [`SoaStorage`] with `pos`, `pos_old`, `acc` columns.
 /// Required by the [`Verlet`] solver.
@@ -57,11 +85,12 @@ macro_rules! test_soa_verlet_storage {
                 let mut s = <$storage>::new(10);
                 s.push(<$item>::default());
                 s.push(<$item>::default());
+                let expected_len = s.len();
                 for c in 0..$n {
                     let (pos, pos_old, acc) = s.pos_pos_old_col_mut_acc(c);
-                    assert_eq!(pos.len(), s.len());
-                    assert_eq!(pos_old.len(), s.len());
-                    assert_eq!(acc.len(), s.len());
+                    assert_eq!(pos.len(),     expected_len);
+                    assert_eq!(pos_old.len(), expected_len);
+                    assert_eq!(acc.len(),     expected_len);
                 }
             }
 

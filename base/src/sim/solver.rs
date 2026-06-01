@@ -25,7 +25,8 @@ pub trait Solver<S: Storage> {
 ///
 /// Forces, constraints, advection, and any other per-step logic all implement this trait.
 /// Layout-agnostic — works with both [`AosStorage`] and [`SoaStorage`].
-/// Compose multiple behaviors with [`chain!`] at zero cost.
+/// Compose behaviors by writing a named struct (e.g. `BoxModel2d`) whose fields
+/// are the scalar kernels from `solver::step_model` and `solver::verlet::step_model`.
 ///
 /// | Hook | Runs | Typical uses |
 /// |------|------|--------------|
