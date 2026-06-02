@@ -7,7 +7,7 @@ use base::sim::{
     storage::{AosStorage, aos_vec::AosVecStorage, soa_vec::SoaVecStorage},
     storage::verlet::{aos::AosVerletItem, soa::SoaVerletStorage},
 };
-use super::particle_2d::{AosParticle2d, SoaParticle2d};
+use super::particle_2d::VerletParticle2d;
 
 /// Gravity + axis-aligned box wall constraint for 2D Verlet particle sims.
 ///
@@ -46,8 +46,8 @@ impl BoxModel2d {
 // AoS impl — iterates over particle structs
 // ---------------------------------------------------------------------------
 
-impl StepModel<AosVecStorage<AosParticle2d>> for BoxModel2d {
-    fn pre(&mut self, storage: &mut AosVecStorage<AosParticle2d>, _dt: f64) {
+impl StepModel<AosVecStorage<VerletParticle2d>> for BoxModel2d {
+    fn pre(&mut self, storage: &mut AosVecStorage<VerletParticle2d>, _dt: f64) {
         for p in storage.iter_mut() {
             let acc = p.acc_mut();
             ClearAcc::apply(&mut acc[0]);
@@ -56,7 +56,7 @@ impl StepModel<AosVecStorage<AosParticle2d>> for BoxModel2d {
         }
     }
 
-    fn post(&mut self, storage: &mut AosVecStorage<AosParticle2d>, _dt: f64) {
+    fn post(&mut self, storage: &mut AosVecStorage<VerletParticle2d>, _dt: f64) {
         for p in storage.iter_mut() {
             let (pos, pos_old, _) = p.pos_pos_old_mut_acc();
             self.x_wall.apply(&mut pos[0], &mut pos_old[0]);
@@ -69,8 +69,8 @@ impl StepModel<AosVecStorage<AosParticle2d>> for BoxModel2d {
 // SoA impl — iterates over contiguous f64 columns (cache-hot)
 // ---------------------------------------------------------------------------
 
-impl StepModel<SoaVecStorage<SoaParticle2d>> for BoxModel2d {
-    fn pre(&mut self, storage: &mut SoaVecStorage<SoaParticle2d>, _dt: f64) {
+impl StepModel<SoaVecStorage<VerletParticle2d>> for BoxModel2d {
+    fn pre(&mut self, storage: &mut SoaVecStorage<VerletParticle2d>, _dt: f64) {
         for a in storage.acc_col_mut(0) { ClearAcc::apply(a); }
         for a in storage.acc_col_mut(1) {
             ClearAcc::apply(a);
@@ -78,7 +78,7 @@ impl StepModel<SoaVecStorage<SoaParticle2d>> for BoxModel2d {
         }
     }
 
-    fn post(&mut self, storage: &mut SoaVecStorage<SoaParticle2d>, _dt: f64) {
+    fn post(&mut self, storage: &mut SoaVecStorage<VerletParticle2d>, _dt: f64) {
         let (px, px_old, _) = storage.pos_pos_old_col_mut_acc(0);
         for i in 0..px.len() { self.x_wall.apply(&mut px[i], &mut px_old[i]); }
 
@@ -95,7 +95,7 @@ impl StepModel<SoaVecStorage<SoaParticle2d>> for BoxModel2d {
 mod tests {
     use super::*;
     use base::sim::{
-        solver::{Solver, StepModelSolver},
+        solver::{Solver},
         solver::verlet::solver::{AosVerletSolver, SoaVerletSolver},
         storage::Storage,
     };
@@ -111,7 +111,7 @@ mod tests {
         let model = BoxModel2d::new(GRAVITY, 0.0, BOX_SIZE, 0.0, BOX_SIZE, RESTITUTION);
         let solver = AosVerletSolver::new(model);
         let mut storage = AosStorage2d::new(64);
-        storage.push(AosParticle2d {
+        storage.push(VerletParticle2d {
             pos:     [5.0, 5.0],
             pos_old: [5.0, 5.0],
             acc:     [0.0, 0.0],
@@ -123,7 +123,7 @@ mod tests {
         let model = BoxModel2d::new(GRAVITY, 0.0, BOX_SIZE, 0.0, BOX_SIZE, RESTITUTION);
         let solver = SoaVerletSolver::new(model);
         let mut storage = SoaStorage2d::new(64);
-        storage.push(SoaParticle2d {
+        storage.push(VerletParticle2d {
             pos:     [5.0, 5.0],
             pos_old: [5.0, 5.0],
             acc:     [0.0, 0.0],
