@@ -1,31 +1,34 @@
-use crate::sim::{clock::Clock, creator::Creator, solver::Solver, storage::Storage};
+use crate::sim::{clock::Clock, lifecycle::Lifecycle, solver::Solver, storage::Storage};
+
+pub trait Simulate {
+    fn simulate(&mut self, frame_time: f64);
+}
 
 /// Owns and coordinates the three components of a simulation.
 /// Makes no assumptions about physics method, dimensionality,
-/// memory layout, orthe type of simulation.
-pub struct Simulation<St, Sv, Cr>
+/// memory layout, or the type of simulation.
+pub struct Simulation<St, Sv, Lc>
 where
     St: Storage,
     Sv: Solver<St>,
-    Cr: Creator<St>,
+    Lc: Lifecycle<St>,
 {
-    storage: St,
-    solver:  Sv,
-    creator: Cr,
-    clock:   Clock,
+    storage:   St,
+    solver:    Sv,
+    lifecycle: Lc,
+    clock:     Clock,
 }
 
-impl<St, Sv, Cr> Simulation<St, Sv, Cr>
+impl<St, Sv, Lc> Simulation<St, Sv, Lc>
 where
     St: Storage,
     Sv: Solver<St>,
-    Cr: Creator<St>,
+    Lc: Lifecycle<St>,
 {
     /// Creates a new simulation running at `hz` ticks per second.
-    /// Calls `creator.init` and `solver.init`.
-    pub fn new(hz: f64, storage: St, solver: Sv, creator: Cr) -> Self {
-        let mut sim = Self { storage, solver, creator, clock: Clock::new(hz) };
-        sim.creator.init(&mut sim.storage);
+    /// Calls `lifecycle.init` and `solver.init`.
+    pub fn new(hz: f64, storage: St, solver: Sv, lifecycle: Lc) -> Self {
+        let mut sim = Self { storage, solver, lifecycle, clock: Clock::new(hz) };
         sim.solver.init(&mut sim.storage);
         sim
     }
@@ -42,7 +45,7 @@ where
             let current_tick = tick + step as u64;
 
             self.storage.pre_step();
-            self.creator.tick(&mut self.storage, current_tick);
+            self.lifecycle.tick(&mut self.storage, current_tick);
 
             self.solver.pre_step(&mut self.storage, dt, current_tick);
             for _ in 0..subs {
@@ -61,73 +64,98 @@ where
     pub fn storage(&self) -> &St { &self.storage }
 }
 
+impl<St, Sv, Lc> Simulate for Simulation<St, Sv, Lc>
+where
+    St: Storage,
+    Sv: Solver<St>,
+    Lc: Lifecycle<St>,
+{
+    fn simulate(&mut self, frame_time: f64) {
+        self.simulate(frame_time)
+    }
+}
 
+/********************/
+/*      TESTS       */
+/********************/
 
-
-/********************/ 
-/*      TESTS       */ 
-/********************/ 
- 
 #[cfg(test)]
 mod tests {
-    use crate::sim::storage::{AosStorage, aos_vec::AosVecStorage};
-
     use super::*;
+    use crate::sim::{
+        lifecycle::Lifecycle,
+        storage::{aos_vec::AosVecStorage, AosCpuStorage, CpuStorage, Storage},
+    };
 
     // --- mock entity ---
+    #[derive(Default, Debug, Clone, Copy, PartialEq)]
     pub struct MockEntity {
         pub d64: f64,
-        pub c8:  u8,
+        pub c8: u8,
     }
 
     // --- mock storage ---
     pub type MockStorage = AosVecStorage<MockEntity>;
-     
+
     // --- mock solver ---
     pub struct MockSolver {
-        pub calls:           String,
-        pub received_ticks:  Vec<u64>,
-        pub received_dts:    Vec<f64>,
+        pub calls: String,
+        pub received_ticks: Vec<u64>,
+        pub received_dts: Vec<f64>,
         pub iteration_count: usize,
     }
 
     impl MockSolver {
         pub fn new() -> Self {
             Self {
-                calls:           String::new(),
-                received_ticks:  Vec::new(),
-                received_dts:    Vec::new(),
+                calls: String::new(),
+                received_ticks: Vec::new(),
+                received_dts: Vec::new(),
                 iteration_count: 2,
             }
         }
     }
 
-    impl Solver<MockStorage> for MockSolver {
-        fn substep_count(&self) -> usize { self.iteration_count }
+    impl<S> Solver<S> for MockSolver
+    where
+        S: Storage + AosCpuStorage<Item = MockEntity>,
+    {
+        fn substep_count(&self) -> usize {
+            self.iteration_count
+        }
 
-        fn pre_step(&mut self, storage: &mut MockStorage, _: f64, tick: u64) {
+        fn pre_step(&mut self, storage: &mut S, _: f64, tick: u64) {
             self.calls.push_str("prepare-");
             self.received_ticks.push(tick);
             storage.push(setup_entity1());
         }
 
-        fn sub_step(&mut self, _: &mut MockStorage, dt: f64) {
+        fn sub_step(&mut self, _: &mut S, dt: f64) {
             self.calls.push_str("sub-");
             self.received_dts.push(dt);
         }
 
-        fn post_step(&mut self, _: &mut MockStorage, dt: f64) {
+        fn post_step(&mut self, _: &mut S, _: f64) {
             self.calls.push_str("finalize");
         }
     }
 
-    // --- mock creator ---
-    pub struct MockCreator;
-    impl Creator<MockStorage> for MockCreator {}
+    // --- mock lifecycle ---
+    pub struct MockLifecycle;
+    impl<S> Lifecycle<S> for MockLifecycle where S: Storage {
+        fn tick(&mut self, _storage: &mut S, _tick: u64) {
+            // dont do anything
+        }
+    }
 
     // --- helpers ---
-    fn setup_sim() -> Simulation<MockStorage, MockSolver, MockCreator> {
-        Simulation::new(100.0, MockStorage::new(10), MockSolver::new(), MockCreator)
+    fn setup_sim() -> Simulation<MockStorage, MockSolver, MockLifecycle> {
+        Simulation::new(
+            100.0,
+            MockStorage::new(10),
+            MockSolver::new(),
+            MockLifecycle,
+        )
     }
 
     fn setup_entity1() -> MockEntity {
@@ -138,10 +166,10 @@ mod tests {
     #[test]
     fn test_initialization() {
         let sim = setup_sim();
-        assert_eq!(sim.storage().capacity(),       10);
-        assert_eq!(sim.clock().elapsed_time(),      0.0);
-        assert_eq!(sim.clock().fixed_dt(),          0.01);
-        assert_eq!(sim.clock().tick(),              0);
+        assert_eq!(sim.storage().capacity(), 10);
+        assert_eq!(sim.clock().elapsed_time(), 0.0);
+        assert_eq!(sim.clock().fixed_dt(), 0.01);
+        assert_eq!(sim.clock().tick(), 0);
     }
 
     #[test]
@@ -151,11 +179,10 @@ mod tests {
 
         sim.simulate(0.01);
 
-        assert_eq!(sim.solver.calls,               "prepare-sub-sub-finalize");
-        assert_eq!(sim.storage().capacity(),        10);
-        assert_eq!(sim.storage().len(),             1);
-        assert_eq!(sim.storage().get(0).d64,        e.d64);
-        assert_eq!(sim.storage().get(0).c8,         e.c8);
+        assert_eq!(sim.solver.calls, "prepare-sub-sub-finalize");
+        assert_eq!(sim.storage().capacity(), 10);
+        assert_eq!(sim.storage().len(), 1);
+        assert_eq!(sim.storage().as_slice()[0], e);
     }
 
     #[test]
@@ -164,12 +191,12 @@ mod tests {
         let dt = sim.clock().fixed_dt();
 
         sim.simulate(dt);
-        assert_eq!(sim.clock().tick(),              1);
-        assert_eq!(sim.clock().elapsed_time(),      dt);
+        assert_eq!(sim.clock().tick(), 1);
+        assert_eq!(sim.clock().elapsed_time(), dt);
 
         sim.simulate(dt * 2.0);
-        assert_eq!(sim.clock().tick(),              3);
-        assert_eq!(sim.clock().elapsed_time(),      dt * 3.0);
+        assert_eq!(sim.clock().tick(), 3);
+        assert_eq!(sim.clock().elapsed_time(), dt * 3.0);
     }
 
     #[test]
@@ -178,13 +205,13 @@ mod tests {
         let dt = sim.clock().fixed_dt();
 
         sim.simulate(0.0);
-        assert_eq!(sim.clock().tick(),              0);
-        assert_eq!(sim.clock().elapsed_time(),      0.0);
+        assert_eq!(sim.clock().tick(), 0);
+        assert_eq!(sim.clock().elapsed_time(), 0.0);
 
         sim.solver.iteration_count = 0;
         sim.simulate(dt);
-        assert_eq!(sim.clock().tick(),              1);
-        assert_eq!(sim.clock().elapsed_time(),      dt);
+        assert_eq!(sim.clock().tick(), 1);
+        assert_eq!(sim.clock().elapsed_time(), dt);
     }
 
     #[test]
@@ -204,10 +231,10 @@ mod tests {
 
     #[test]
     fn test_substep_dt_scaling() {
-        let mut sim   = setup_sim();
-        let count     = sim.solver.substep_count();
-        let dt_step   = sim.clock().fixed_dt();
-        let dt_sub    = dt_step / count as f64;
+        let mut sim = setup_sim();
+        let count = sim.solver.iteration_count;
+        let dt_step = sim.clock().fixed_dt();
+        let dt_sub = dt_step / count as f64;
 
         sim.simulate(dt_step * 4.0);
         assert_eq!(sim.solver.received_dts, vec![dt_sub; count * 4]);
@@ -215,8 +242,8 @@ mod tests {
 
     #[test]
     fn test_storage_mutation_count() {
-        let mut sim  = setup_sim();
-        let dt_step  = sim.clock().fixed_dt();
+        let mut sim = setup_sim();
+        let dt_step = sim.clock().fixed_dt();
         sim.simulate(dt_step * 2.1);
         assert_eq!(sim.storage().len(), 2);
     }

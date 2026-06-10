@@ -1,4 +1,4 @@
-use crate::sim::storage::SoaStorage;
+use crate::sim::storage::SoaCpuStorage;
 
 /// [`SoaStorage`] with `pos`, `vel`, `acc` columns.
 /// Required by [`SymplecticEuler`], [`Leapfrog`], and [`VelocityVerlet`] solvers.
@@ -10,7 +10,7 @@ use crate::sim::storage::SoaStorage;
 /// Only combined accessors are exposed for fields that must be borrowed
 /// simultaneously. Implementations prove disjointness via direct field
 /// access or `split_at_mut`.
-pub trait SoaNewtonianStorage: SoaStorage {
+pub trait SoaNewtonianStorage: SoaCpuStorage {
     /// One component column — length `len()`.
     fn pos_col(&self, c: usize) -> &[f64];
     fn vel_col(&self, c: usize) -> &[f64];

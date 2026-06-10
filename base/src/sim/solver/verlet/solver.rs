@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::sim::storage::{
-    AosStorage,
+    AosCpuStorage,
     verlet::soa::SoaVerletStorage,
     verlet::aos::AosVerletItem,
 };
@@ -75,7 +75,7 @@ impl<S, M, const N: usize> AosVerletSolver<S, M, N> {
 
 impl<S, M, const N: usize> Solver<S> for AosVerletSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosVerletItem<N>,
     M: StepModel<S>,
 {
@@ -99,7 +99,7 @@ where
 
 impl<S, M, const N: usize> StepModelSolver<S> for AosVerletSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosVerletItem<N>,
     M: StepModel<S>,
 {

@@ -88,15 +88,25 @@ impl SoaVerletLayout for VerletParticle2d {
 /// Convenience alias — `SoaVecStorage<VerletParticle2d>` automatically implements
 /// `SoaVerletStorage` via the blanket impl on `SoaVerletLayout`.
 pub type SoaStorage2d = SoaVecStorage<VerletParticle2d>;
- 
-#[cfg(test)]
+ #[cfg(test)]
 mod tests {
     use super::*;
-    use base::sim::storage::{Storage, verlet::soa::SoaVerletStorage};
+    use base::sim::storage::{CpuStorage, SoaCpuStorage, Storage, verlet::soa::SoaVerletStorage};
 
-    mod aos { use super::*; base::test_storage!(AosStorage2d, VerletParticle2d); }
-    mod soa { use super::*; base::test_storage!(SoaStorage2d, VerletParticle2d); }
-    base::test_soa_verlet_storage!(SoaStorage2d, VerletParticle2d, 2);
+    base::test_soa_layout!(VerletParticle2d, VerletParticle2d::new(1.0, 2.0), VerletParticle2d::new(3.0, 4.0));
+
+    mod aos { 
+        use super::*; 
+        base::test_cpu_storage!(AosStorage2d);
+        base::test_aos_cpu_storage!(AosStorage2d, VerletParticle2d, VerletParticle2d::new(1.0, 2.0), VerletParticle2d::new(3.0, 4.0));
+    }
+    
+    mod soa { 
+        use super::*; 
+        base::test_cpu_storage!(SoaStorage2d);
+    }
+    
+    base::test_soa_verlet_storage!(VerletParticle2d, 2);
     base::test_aos_verlet_storage!(AosStorage2d, VerletParticle2d, 2);
 
     #[test]
@@ -117,7 +127,10 @@ mod tests {
     #[test]
     fn soa_column_values_match_pushed_particle() {
         let mut s = SoaStorage2d::new(4);
-        s.push(VerletParticle2d::new(1.0, 2.0));
+        let p = VerletParticle2d::new(1.0, 2.0);
+        p.push_cols(s.columns_mut());
+        s.increment_len();
+        
         assert_eq!(s.pos_col(0)[0], 1.0);
         assert_eq!(s.pos_col(1)[0], 2.0);
         assert_eq!(s.pos_old_col(0)[0], 1.0);
@@ -125,4 +138,4 @@ mod tests {
         assert_eq!(s.acc_col(0)[0], 0.0);
         assert_eq!(s.acc_col(1)[0], 0.0);
     }
-} 
+}

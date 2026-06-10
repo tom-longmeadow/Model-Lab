@@ -1,5 +1,6 @@
 pub mod text;
 pub mod ui;
+pub mod simulation;
 
 pub trait RenderPass {
     fn prepare(

@@ -1,4 +1,4 @@
-use crate::sim::storage::AosStorage;
+use crate::sim::storage::AosCpuStorage;
 
 /// Per-item accessor contract for AoS verlet storage.
 /// Mirrors the combined-borrow API of [`SoaVerletStorage`] but at the item level.
@@ -11,7 +11,7 @@ pub trait AosVerletItem<const N: usize> {
 }
 
 /// Marker — an [`AosStorage`] whose items implement [`AosVerletItem<N>`].
-pub trait AosVerletStorage<const N: usize>: AosStorage
+pub trait AosVerletStorage<const N: usize>: AosCpuStorage
 where
     Self::Item: AosVerletItem<N>,
 {}
@@ -25,7 +25,7 @@ macro_rules! test_aos_verlet_storage {
         #[cfg(test)]
         mod aos_verlet_storage_tests {
             use super::*;
-            use $crate::sim::storage::{AosStorage, verlet::aos::AosVerletItem};
+            use $crate::sim::storage::{CpuStorage, AosCpuStorage, verlet::aos::AosVerletItem};
 
             #[test]
             fn acc_mut_len_is_n() {

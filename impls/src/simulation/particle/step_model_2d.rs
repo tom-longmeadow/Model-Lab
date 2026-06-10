@@ -4,7 +4,7 @@ use base::sim::{
         step_model::{ClearAcc, ConstantAccel},
     },
     solver::verlet::step_model::VerletDimConstraint,
-    storage::{AosStorage, aos_vec::AosVecStorage, soa_vec::SoaVecStorage},
+    storage::{AosCpuStorage, aos_vec::AosVecStorage, soa_vec::SoaVecStorage},
     storage::verlet::{aos::AosVerletItem, soa::SoaVerletStorage},
 };
 use super::particle_2d::VerletParticle2d;
@@ -95,9 +95,8 @@ impl StepModel<SoaVecStorage<VerletParticle2d>> for BoxModel2d {
 mod tests {
     use super::*;
     use base::sim::{
-        solver::{Solver},
-        solver::verlet::solver::{AosVerletSolver, SoaVerletSolver},
-        storage::Storage,
+        solver::{Solver, verlet::solver::{AosVerletSolver, SoaVerletSolver}},
+        storage::{CpuStorage, SoaLayout, Storage},
     };
     use super::super::particle_2d::{AosStorage2d, SoaStorage2d};
 
@@ -120,14 +119,17 @@ mod tests {
     }
 
     fn soa_sim() -> (SoaVerletSolver<SoaStorage2d, BoxModel2d, 2>, SoaStorage2d) {
+        use base::sim::storage::SoaCpuStorage;
         let model = BoxModel2d::new(GRAVITY, 0.0, BOX_SIZE, 0.0, BOX_SIZE, RESTITUTION);
         let solver = SoaVerletSolver::new(model);
         let mut storage = SoaStorage2d::new(64);
-        storage.push(VerletParticle2d {
+        let p = VerletParticle2d {
             pos:     [5.0, 5.0],
             pos_old: [5.0, 5.0],
             acc:     [0.0, 0.0],
-        });
+        };
+        p.push_cols(storage.columns_mut());
+        storage.increment_len();
         (solver, storage)
     }
 

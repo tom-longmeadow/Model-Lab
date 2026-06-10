@@ -1,4 +1,4 @@
-use crate::sim::storage::AosStorage;
+use crate::sim::storage::AosCpuStorage;
 
 /// Per-item accessor contract for AoS newtonian storage.
 /// Mirrors the combined-borrow API of [`SoaNewtonianStorage`] but at the item level,
@@ -26,7 +26,7 @@ pub trait AosNewtonianItem<const N: usize> {
 /// Marker — an [`AosStorage`] whose items implement [`AosNewtonianItem<N>`].
 /// The solver bounds are written directly as `S: AosStorage, S::Item: AosNewtonianItem<N>`
 /// so this trait is optional, but useful as a single bound in user code.
-pub trait AosNewtonianStorage<const N: usize>: AosStorage
+pub trait AosNewtonianStorage<const N: usize>: AosCpuStorage
 where
     Self::Item: AosNewtonianItem<N>,
 {}

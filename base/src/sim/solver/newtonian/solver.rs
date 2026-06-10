@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::sim::storage::{
-    AosStorage,
+    AosCpuStorage,
     newtonian::soa::SoaNewtonianStorage,
     newtonian::aos::AosNewtonianItem,
 };
@@ -73,7 +73,7 @@ impl<S, M, const N: usize> AosSymplecticEulerSolver<S, M, N> {
 
 impl<S, M, const N: usize> Solver<S> for AosSymplecticEulerSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
@@ -97,7 +97,7 @@ where
 
 impl<S, M, const N: usize> StepModelSolver<S> for AosSymplecticEulerSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
@@ -180,7 +180,7 @@ impl<S, M, const N: usize> AosLeapfrogSolver<S, M, N> {
 
 impl<S, M, const N: usize> Solver<S> for AosLeapfrogSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
@@ -212,7 +212,7 @@ where
 
 impl<S, M, const N: usize> StepModelSolver<S> for AosLeapfrogSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
@@ -293,7 +293,7 @@ impl<S, M, const N: usize> AosVelocityVerletSolver<S, M, N> {
 
 impl<S, M, const N: usize> Solver<S> for AosVelocityVerletSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
@@ -327,7 +327,7 @@ where
 
 impl<S, M, const N: usize> StepModelSolver<S> for AosVelocityVerletSolver<S, M, N>
 where
-    S: AosStorage,
+    S: AosCpuStorage,
     S::Item: AosNewtonianItem<N>,
     M: StepModel<S>,
 {
