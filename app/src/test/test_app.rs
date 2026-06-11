@@ -1,4 +1,4 @@
-use crate::{core::AppLogic, engine::scene::Scene, renderer::config::RendererConfig, test::test_scene::TestScene};
+use crate::{core::AppLogic, engine::scene::Scene, graphics_context::config::RendererConfig, test::test_scene::TestScene};
 
  
 

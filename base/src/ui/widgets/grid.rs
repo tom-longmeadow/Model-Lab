@@ -1,7 +1,7 @@
 use crate::ui::{ 
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer},
     macros::impl_widget_base,
-    text::params::TextParam,
+    text::params::TextGroup,
     widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text},
 };
 
@@ -201,7 +201,7 @@ impl Widget for Grid {
         }
     }
 
-    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_text_inner(&self, out: &mut Vec<TextGroup>, params: &LayoutParams) {
         for cell in self.container.cells() {
             collect_text(cell.widget.as_ref(), out, params);
         }

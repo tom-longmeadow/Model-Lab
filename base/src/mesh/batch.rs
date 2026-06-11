@@ -20,7 +20,7 @@ impl MeshBatch {
     /// Append a mesh into this batch, offsetting its indices
     pub fn push(&mut self, mesh: &Mesh) {
         assert_eq!(
-            self.kind, mesh.mesh_type,
+            self.kind, mesh.kind,
             "cannot batch meshes of different kinds"
         );
 
@@ -57,7 +57,7 @@ impl MeshBatcher {
     }
 
     pub fn push(&mut self, mesh: &Mesh) {
-        match mesh.mesh_type {
+        match mesh.kind {
             MeshKind::Triangle => self.triangles.push(mesh),
             MeshKind::Line => self.lines.push(mesh),
             MeshKind::Point => self.points.push(mesh),

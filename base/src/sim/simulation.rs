@@ -1,7 +1,9 @@
 use crate::sim::{clock::Clock, lifecycle::Lifecycle, solver::Solver, storage::Storage};
 
 pub trait Simulate {
+    type Storage: Storage; // <-- Add this line
     fn simulate(&mut self, frame_time: f64);
+    fn storage(&self) -> &Self::Storage; // <-- Add this line
 }
 
 /// Owns and coordinates the three components of a simulation.
@@ -32,10 +34,22 @@ where
         sim.solver.init(&mut sim.storage);
         sim
     }
+ 
+    /// Read access to the clock — for alpha, elapsed time, tick count.
+    pub fn clock(&self) -> &Clock { &self.clock }
+}
+
+impl<St, Sv, Lc> Simulate for Simulation<St, Sv, Lc>
+where
+    St: Storage,
+    Sv: Solver<St>,
+    Lc: Lifecycle<St>,
+{
+    type Storage = St;
 
     /// Advances the simulation by `frame_time` seconds of real-world time.
     /// May run zero, one, or many ticks depending on the accumulator.
-    pub fn simulate(&mut self, frame_time: f64) {
+    fn simulate(&mut self, frame_time: f64) {
         let tick  = self.clock.tick();
         let steps = self.clock.advance(frame_time);
         let subs  = self.solver.substep_count().max(1);
@@ -57,21 +71,9 @@ where
         }
     }
 
-    /// Read access to the clock — for alpha, elapsed time, tick count.
-    pub fn clock(&self) -> &Clock { &self.clock }
 
-    /// Read access to storage — for the renderer or external observers.
-    pub fn storage(&self) -> &St { &self.storage }
-}
-
-impl<St, Sv, Lc> Simulate for Simulation<St, Sv, Lc>
-where
-    St: Storage,
-    Sv: Solver<St>,
-    Lc: Lifecycle<St>,
-{
-    fn simulate(&mut self, frame_time: f64) {
-        self.simulate(frame_time)
+    fn storage(&self) -> &Self::Storage {
+        &self.storage
     }
 }
 

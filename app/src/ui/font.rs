@@ -1,7 +1,12 @@
  
 
-use base::ui::text::font::{FontStyle, TextFont};
-use glyphon::cosmic_text;
+use base::ui::text::{font::{FontStyle, TextFont}, style::TextAlign};
+ 
+
+use glyphon::{
+    cosmic_text, 
+};
+
 
 pub trait TextFontExt {
     fn attrs(&self) -> glyphon::Attrs<'_>;
@@ -19,5 +24,16 @@ impl TextFontExt for TextFont {
             .family(cosmic_text::Family::Name(self.family_name()))
             .weight(weight)
             .style(style)
+    }
+}
+
+
+pub fn to_glyphon_align(align: TextAlign) -> cosmic_text::Align {
+    match align {
+        TextAlign::Left => cosmic_text::Align::Left,
+        TextAlign::Center => cosmic_text::Align::Center,
+        TextAlign::Right => cosmic_text::Align::Right,
+        TextAlign::Justified => cosmic_text::Align::Justified,
+        TextAlign::End => cosmic_text::Align::End,
     }
 }

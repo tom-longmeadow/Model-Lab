@@ -6,19 +6,19 @@ use winit::event_loop::ActiveEventLoop;
 pub mod scene;
 pub mod input;
 
-use crate::renderer::config::RendererConfig;
+use crate::graphics_context::config::RendererConfig;
 use crate::{
     engine::{
         input::InputState, 
         scene::Scene, 
     }, 
-    renderer::{
-        Renderer, 
+    graphics_context::{
+        GraphicsContext, 
         error::RendererError
     }
 };
 pub struct Engine {
-    renderer: Renderer,
+    graphics: GraphicsContext,
     scenes:    Box<dyn Scene>,
     input:    InputState,
 }
@@ -33,12 +33,12 @@ impl Engine {
         scene:  Box<dyn Scene>,                  
     ) -> Result<Self, RendererError> {
         tracing::info!("Engine initializing {}x{}", width, height);
-        let mut renderer = Renderer::new(window, width, height, config).await?;
+        let mut renderer = GraphicsContext::new(window, width, height, config).await?;
 
         scene.build_passes(&mut renderer);
         tracing::info!("Engine ready");
         Ok(Self {
-            renderer,
+            graphics: renderer,
             scenes: scene,
             input: InputState::new(),
         })
@@ -53,25 +53,31 @@ impl Engine {
             }
             WindowEvent::Resized(size)   => {
                 tracing::debug!("Resize {}x{}", size.width, size.height);
-                self.renderer.resize(size.width, size.height);
+                self.graphics.resize(size.width, size.height);
             }
             WindowEvent::RedrawRequested => self.render(event_loop),
             _                            => {}
         }
     }
+ 
 
-    fn render(&mut self, event_loop: &ActiveEventLoop) {
-
+     fn render(&mut self, event_loop: &ActiveEventLoop) {
         tracing::info!("Rendering...");
 
+        // Begin frame, update scene logic
         self.input.begin_frame();
         self.scenes.update(&self.input); 
-        match self.renderer.render() {
+
+        // update the state of the render passes
+        self.scenes.update_passes(&mut self.graphics);
+
+        // Renderer performs the render  
+        match self.graphics.render() {
             Ok(())                          => {}
             Err(RendererError::Outdated) |
             Err(RendererError::Lost)        => {
                 tracing::warn!("Surface lost/outdated — reconfiguring");
-                self.renderer.reconfigure();
+                self.graphics.reconfigure();
             }
             Err(RendererError::Occluded) |
             Err(RendererError::Timeout)     => {
@@ -83,5 +89,6 @@ impl Engine {
             }
         }
     }
+
 }
  

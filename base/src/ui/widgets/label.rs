@@ -1,7 +1,7 @@
 use crate::ui::{
     
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
-    macros::{impl_widget_base, impl_widget_text}, text::{item::TextItem, params::TextParam},
+    macros::{impl_widget_base, impl_widget_text}, text::{item::TextItem, params::TextGroup},
     widget::{ControlKind, Widget, WidgetBase},
      widget_text::{TextKind, WidgetText}
  
@@ -53,11 +53,11 @@ impl Widget for Label {
         }
     }
 
-    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_text_inner(&self, out: &mut Vec<TextGroup>, params: &LayoutParams) {
         let rect = self.base.rect();
         let padding = params.control.style_for(self.base.kind()).padding;
         let style   = params.text.style_for(self.text.kind());
-        out.push(TextParam::new(
+        out.push(TextGroup::new(
             style,
             vec![TextItem::new(self.text(), rect, padding)],
         ));

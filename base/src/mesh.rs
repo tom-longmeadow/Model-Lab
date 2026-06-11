@@ -11,7 +11,7 @@ pub type Index = u32;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mesh {
-    pub mesh_type: MeshKind,
+    pub kind: MeshKind,
     pub vertices: Vec<Vertex>,
     pub indices: Vec<Index>,
 }
@@ -19,7 +19,7 @@ pub struct Mesh {
 impl Mesh {
     pub fn new(mesh_type: MeshKind, vertices: Vec<Vertex>, indices: Vec<Index>) -> Self {
         Self {
-            mesh_type,
+            kind: mesh_type,
             vertices,
             indices,
         }

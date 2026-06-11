@@ -9,7 +9,7 @@ use crate::unit::UnitSystem;
 use crate::ui::{
     container::WidgetContainer,
     layout::{layout_params::LayoutParams, rect::Rect, size::Size},
-    text::params::TextParam,
+    text::params::TextGroup,
     widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text},
     widgets::{
         grid::Grid,
@@ -142,7 +142,7 @@ where
         }
     }
 
-    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_text_inner(&self, out: &mut Vec<TextGroup>, params: &LayoutParams) {
         for child in self.container.children() {
             collect_text(child.as_ref(), out, params);
         }

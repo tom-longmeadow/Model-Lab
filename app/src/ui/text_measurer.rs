@@ -2,7 +2,8 @@
 use base::ui::{layout::{size::Size, text_measurer::TextMeasurer}, text::{font::TextFont, style::TextStyle}};
 use glyphon::cosmic_text;
 
-use crate::renderer::pass::text::font::TextFontExt;
+use crate::ui::font::TextFontExt;
+ 
 
 
 pub struct GlyphonTextMeasurer {

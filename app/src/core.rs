@@ -1,10 +1,10 @@
 use crate::{
     engine::scene::Scene, 
-    renderer::config::RendererConfig
+    graphics_context::config::RendererConfig
 };
 use std::sync::Arc;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
-use crate::{engine::Engine, renderer::error::RendererError};
+use crate::{engine::Engine, graphics_context::error::RendererError};
 
   
 pub trait AppLogic {

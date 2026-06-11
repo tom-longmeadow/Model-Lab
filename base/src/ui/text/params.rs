@@ -4,12 +4,12 @@ use crate::ui::text::{
     style::TextStyle,
 };
 
-pub struct TextParam {
+pub struct TextGroup {
     pub style: TextStyle,
     pub items: Vec<TextItem>,
 }
 
-impl TextParam {
+impl TextGroup {
     pub fn new(style: TextStyle, items: Vec<TextItem>) -> Self {
         Self { style, items }
     }
@@ -17,16 +17,22 @@ impl TextParam {
 
 
 pub struct TextParams {
-    pub groups: Vec<TextParam>,
+    pub groups: Vec<TextGroup>,
 }
 
 impl TextParams {
-    pub fn new(groups: Vec<TextParam>) -> Self {
+    pub fn new(groups: Vec<TextGroup>) -> Self {
         Self { groups }
     }
 
     pub fn single(style: TextStyle, items: Vec<TextItem>) -> Self {
-        Self::new(vec![TextParam::new(style, items)])
+        Self::new(vec![TextGroup::new(style, items)])
+    }
+}
+
+impl Default for TextParams {
+    fn default() -> Self {
+        Self { groups: Vec::new() }
     }
 }
 

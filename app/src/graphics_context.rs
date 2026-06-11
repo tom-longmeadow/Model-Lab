@@ -7,27 +7,27 @@ pub mod config;
 pub mod error;
 pub mod pass;
 pub mod buffers;
-pub mod vertex;
-pub mod ui_pass_builder;
+pub mod vertex; 
+pub mod renderer;
 
-use crate::renderer::{
+use crate::graphics_context::{
     config::RendererConfig,
     error::RendererError,
-    pass::RenderPass,
+    pass::{Pass},
 };
 
 
-pub struct Renderer {
+pub struct GraphicsContext {
     surface:      wgpu::Surface<'static>,
     device:       wgpu::Device,
     queue:        wgpu::Queue,
     surface_cfg: wgpu::SurfaceConfiguration,
     config:  RendererConfig,              
-    passes:       Vec<Box<dyn RenderPass>>,
+    passes:       Vec<Box<dyn Pass>>,
 }
 
 
-impl Renderer {
+impl GraphicsContext {
 
     pub async fn new(
         window: Arc<impl HasWindowHandle + HasDisplayHandle + Send + Sync + 'static>,
@@ -80,10 +80,16 @@ impl Renderer {
         Ok(Self { surface, device, queue, surface_cfg, config, passes: vec![] })
     }
 
-    pub fn add_pass(&mut self, mut pass: Box<dyn RenderPass>) {
+
+    pub fn add_pass(&mut self, mut pass: impl Pass + 'static) {
         pass.prepare(&self.device, &self.queue, &self.surface_cfg);
-        self.passes.push(pass);
+        self.passes.push(Box::new(pass));
     }
+
+     pub fn passes_mut(&mut self) -> &mut [Box<dyn Pass>] {
+        &mut self.passes
+    }
+
 
     pub fn device(&self) -> &wgpu::Device {
         &self.device
@@ -96,6 +102,8 @@ impl Renderer {
     pub fn pass_count(&self) -> usize {
         self.passes.len()
     }
+
+    
 
     pub fn surface_config(&self) -> &wgpu::SurfaceConfiguration {
         &self.surface_cfg
@@ -125,7 +133,7 @@ impl Renderer {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         for pass in &mut self.passes {
-            pass.update(&self.device, &self.queue);
+            pass.update(&self.device, &self.queue,&self.surface_cfg);
         }
 
         let mut encoder =

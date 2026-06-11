@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ui::{
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer},
-    text::params::TextParam,
+    text::params::{TextGroup},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -66,7 +66,7 @@ pub trait Widget {
     fn base(&self) -> &WidgetBase;
 
     fn collect_rects_inner(&self, _out: &mut Vec<WidgetBase>) {}
-    fn collect_text_inner(&self, _out: &mut Vec<TextParam>, _params: &LayoutParams) {}
+    fn collect_text_inner(&self, _out: &mut Vec<TextGroup>, _params: &LayoutParams) {}
 }
 
 pub fn collect_rects(widget: &dyn Widget, out: &mut Vec<WidgetBase>) {
@@ -75,7 +75,7 @@ pub fn collect_rects(widget: &dyn Widget, out: &mut Vec<WidgetBase>) {
     }
 }
 
-pub fn collect_text(widget: &dyn Widget, out: &mut Vec<TextParam>, params: &LayoutParams) {
+pub fn collect_text(widget: &dyn Widget, out: &mut Vec<TextGroup>, params: &LayoutParams) {
     if widget.base().is_visible() {
         widget.collect_text_inner(out, params);
     }

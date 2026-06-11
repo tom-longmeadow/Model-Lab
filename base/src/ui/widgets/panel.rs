@@ -2,7 +2,7 @@ use crate::ui::{
     container::WidgetContainer, 
     layout::{layout_params::LayoutParams, rect::Rect, size::Size, text_measurer::TextMeasurer}, 
     macros::{impl_widget_base, impl_widget_container}, 
-    text::params::TextParam, widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
+    text::params::TextGroup, widget::{ControlKind, Widget, WidgetBase, collect_rects, collect_text}
     
 };
 
@@ -85,7 +85,7 @@ impl Widget for Panel {
         }
     }
 
-    fn collect_text_inner(&self, out: &mut Vec<TextParam>, params: &LayoutParams) {
+    fn collect_text_inner(&self, out: &mut Vec<TextGroup>, params: &LayoutParams) {
         for child in self.container.children() {
             collect_text(child.as_ref(), out, params);
         }
