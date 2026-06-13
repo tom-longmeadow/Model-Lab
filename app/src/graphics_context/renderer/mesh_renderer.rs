@@ -1,9 +1,7 @@
 use base::mesh::{Mesh, kind::MeshKind};
 use wgpu::util::DeviceExt;
 use crate::graphics_context::{
-    buffers::{GpuMeshBuffers},
-    renderer::Renderer,
-    vertex::GpuVertex,
+    buffers::GpuMeshBuffers, renderer::Renderer, shader::{ShaderBuilder, fragment::FragmentFunction, vertex::VertexFunction, vertex_input::VertexInput, vertex_output::VertexOutput}, vertex::GpuVertex
 };
 
 /// A dedicated renderer that knows how to draw a slice of `Mesh` objects.
@@ -70,9 +68,17 @@ impl Renderer<Vec<Mesh>> for MeshRenderer {
             }],
         });
 
-        // 3) Pipelines
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shader/ui.wgsl"));
-
+      // 3) Pipelines
+        // Replace the old shader creation with the new ShaderBuilder
+        let shader = ShaderBuilder::new(
+            VertexOutput::Color,
+            VertexFunction::Ui,
+            FragmentFunction::Passthrough,
+        )
+        .label("UI Mesh Shader")
+        .with_vertex_input(VertexInput::Color)
+        .build(device);
+    
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("MeshRenderer Pipeline Layout"),
             bind_group_layouts: &[Some(&bind_group_layout)], // Wrap in Some()

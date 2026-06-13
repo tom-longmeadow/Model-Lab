@@ -1,5 +1,15 @@
 use wgpu::{Device, Queue, SurfaceConfiguration, util::DeviceExt};
-use crate::graphics_context::{renderer::Renderer, vertex::GpuVertex};
+use crate::graphics_context::{
+    renderer::Renderer,
+    vertex::GpuVertex,
+    shader::{
+        ShaderBuilder,
+        vertex::VertexFunction,
+        vertex_input::VertexInput,
+        vertex_output::VertexOutput,
+        fragment::FragmentFunction,
+    },
+};
 use base::sim::storage::AosCpuStorage;
 use impls::simulation::particle::particle_2d::VerletParticle2d;
 
@@ -33,11 +43,25 @@ where
     ) {
         if self.pipeline.is_some() { return; }
 
-        let shader = device.create_shader_module(wgpu::include_wgsl!("../shader/particle.wgsl"));
+        // Build the shader using the new modular system.
+        // We're using:
+        // - VertexInput::Color (position + color)
+        // - VertexOutput::Color (clip_position + color)
+        // - VertexFunction::ParticleAosColor (AOS particle vertex shader)
+        // - FragmentFunction::Circular (draws circular points)
+        let shader = ShaderBuilder::new(
+            VertexOutput::Color,
+            VertexFunction::ParticleAosColor,
+            FragmentFunction::Circular,
+        )
+        .label("AOS Particle Shader")
+        .with_vertex_input(VertexInput::Color) // AOS needs the input struct
+        .build(device);
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Particle Pipeline Layout"),
-            bind_group_layouts: &[None],  
-            immediate_size: 0, 
+            bind_group_layouts: &[],
+             immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -45,7 +69,7 @@ where
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point:Some("vs_main"),
+                entry_point: Some("vs_main"),
                 buffers: &[GpuVertex::layout()],
                 compilation_options: Default::default(),
             },
@@ -64,24 +88,24 @@ where
                 ..Default::default()
             },
             depth_stencil: None,
-             multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,       // Add cache
+            cache: None,       
         });
 
         self.pipeline = Some(pipeline);
     }
 
-    fn update(&mut self, device: &Device, queue: &Queue, _config: &SurfaceConfiguration, data: &D){
+    fn update(&mut self, device: &Device, queue: &Queue, _config: &SurfaceConfiguration, data: &D) {
         let storage_slice = data.as_slice();
         self.particle_count = storage_slice.len() as u32;
         if self.particle_count == 0 { return; }
 
-       let gpu_verts: Vec<GpuVertex> = storage_slice.iter().map(|p| GpuVertex {
+        let gpu_verts: Vec<GpuVertex> = storage_slice.iter().map(|p| GpuVertex {
             position: [p.pos[0] as f32, p.pos[1] as f32, 0.0],
-            normal: [0.0, 0.0, 1.0], // Add a default normal
-            uv: [0.0, 0.0],          // Add default UV coordinates
-            color: [1.0, 0.5, 0.2, 1.0], // Example color
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+            color: [1.0, 0.5, 0.2, 1.0],
         }).collect();
 
         // Create or update the vertex buffer
@@ -111,4 +135,3 @@ where
         pass.draw(0..self.particle_count, 0..1);
     }
 }
- 

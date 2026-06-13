@@ -1,4 +1,3 @@
 pub mod font;
 pub mod text_measurer;
-pub mod mesh_builder;
-pub mod text;
+pub mod mesh_builder; 

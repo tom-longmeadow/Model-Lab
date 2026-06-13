@@ -16,9 +16,7 @@ struct GlyphonState {
     _cache: Cache,
     atlas: TextAtlas,
     viewport: Viewport,
-    renderer: GlyphonRenderer,
-    // A text buffer that we will reuse every frame.
-    buffer: Buffer,
+    renderer: GlyphonRenderer, 
 }
 
 /// A dedicated renderer that knows how to draw `TextParams` using `glyphon`.
@@ -44,7 +42,7 @@ impl Renderer<TextParams> for TextRenderer {
             return;
         }
 
-               let mut font_system = FontSystem::new();
+        let mut font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
         let mut cache = Cache::new(device);
         let mut atlas = TextAtlas::new(device, queue, &mut cache, config.format);
@@ -52,16 +50,14 @@ impl Renderer<TextParams> for TextRenderer {
         let viewport = Viewport::new(device, &mut cache);
         let renderer =
             GlyphonRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
-        let buffer = Buffer::new(&mut font_system, Metrics::new(30.0, 42.0));
-
+         
         self.state = Some(GlyphonState {
             font_system,
             swash_cache,
             _cache: cache,  
             atlas,
             viewport,
-            renderer,
-            buffer,
+            renderer, 
         });
     }
 
@@ -85,52 +81,81 @@ impl Renderer<TextParams> for TextRenderer {
             },
         );
 
-        // 1. MUTATING PHASE: Populate the single buffer with all text content.
-        state.buffer.set_size(
-            &mut state.font_system,
-            Some(config.width as f32),
-            Some(config.height as f32),
-        );
+        // 1. Create ONE buffer per text item.
+        //    set_text REPLACES content - it does not append.
+        //    A shared buffer will only ever contain the LAST item's text.
+        struct PreparedItem {
+            buffer: Buffer,
+            x: f32,
+            y: f32,
+            width: f32,
+            color: Color,
+        }
+
+        let mut prepared: Vec<PreparedItem> = Vec::new();
 
         for group in &data.groups {
             let color = group.style.color;
+            let glyphon_color = Color::rgba(color.r, color.g, color.b, color.a);
+
             for item in &group.items {
-                // Move Attrs creation inside the inner loop.
-                // This is very cheap and solves the move error.
+                // Create a fresh buffer for this specific text item.
+                let mut buffer = Buffer::new(
+                    &mut state.font_system,
+                    Metrics::new(30.0, 42.0),
+                );
+
+                // Size the buffer to the item's own width, not the full screen.
+                buffer.set_size(
+                    &mut state.font_system,
+                    Some(item.width),
+                    Some(config.height as f32),
+                );
+
                 let attrs = group.style.font.attrs();
-                state.buffer.set_text(
+                buffer.set_text(
                     &mut state.font_system,
                     &item.text,
-                    &attrs.color(Color::rgba(color.r, color.g, color.b, color.a)),
+                    &attrs.color(glyphon_color),
                     Shaping::Advanced,
                     Some(to_glyphon_align(group.style.align)),
                 );
-            }
-        }
 
-        // 2. IMMUTABLE BORROWING PHASE: (This part is unchanged and correct)
-        let mut areas: Vec<TextArea> = Vec::new();
-        for group in &data.groups {
-            let color = group.style.color;
-            for item in &group.items {
-                areas.push(TextArea {
-                    buffer: &state.buffer,
-                    left: item.x,
-                    top: item.y,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: item.x as i32,
-                        top: item.y as i32,
-                        right: (item.x + item.width) as i32,
-                        bottom: config.height as i32,
-                    },
-                    default_color: Color::rgba(color.r, color.g, color.b, color.a),
-                    custom_glyphs: &[],
+                // Shape the buffer so layout_runs() has data for glyphon to render.
+                buffer.shape_until_scroll(&mut state.font_system, false);
+
+                prepared.push(PreparedItem {
+                    buffer,
+                    x: item.x,
+                    y: item.y,
+                    width: item.width,
+                    color: glyphon_color,
                 });
             }
         }
 
-        // 3. PREPARE FOR RENDERING (Unchanged)
+        // 2. Borrow from our local `prepared` vec to create TextAreas.
+        //    `prepared` owns the buffers. `areas` borrows them.
+        //    Neither borrows from `state`, so the borrow checker is happy.
+        let areas: Vec<TextArea> = prepared
+            .iter()
+            .map(|p| TextArea {
+                buffer: &p.buffer,
+                left: p.x,
+                top: p.y,
+                scale: 1.0,
+                bounds: TextBounds {
+                    left: p.x as i32,
+                    top: p.y as i32,
+                    right: (p.x + p.width) as i32,
+                    bottom: config.height as i32,
+                },
+                default_color: p.color,
+                custom_glyphs: &[],
+            })
+            .collect();
+
+        // 3. Prepare for rendering.
         state
             .renderer
             .prepare(
@@ -143,8 +168,8 @@ impl Renderer<TextParams> for TextRenderer {
                 &mut state.swash_cache,
             )
             .unwrap();
-    }
 
+    }
     /// Issues the draw calls to render the prepared text.
     fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
         let Some(state) = &self.state else {

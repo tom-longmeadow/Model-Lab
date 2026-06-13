@@ -9,6 +9,7 @@ pub mod pass;
 pub mod buffers;
 pub mod vertex; 
 pub mod renderer;
+pub mod shader;
 
 use crate::graphics_context::{
     config::RendererConfig,
