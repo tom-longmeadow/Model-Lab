@@ -21,17 +21,19 @@ struct GlyphonState {
 
 /// A dedicated renderer that knows how to draw `TextParams` using `glyphon`.
 pub struct TextRenderer {
+    data: TextParams,
     state: Option<GlyphonState>,
 }
 
 impl TextRenderer {
-    pub fn new() -> Self {
-        Self { state: None }
+    pub fn new(data: TextParams) -> Self {
+        Self { data, state: None }
     }
 }
 
-impl Renderer<TextParams> for TextRenderer {
-    /// Prepares the long-lived `glyphon` resources.
+impl Renderer for TextRenderer {
+    type Data = TextParams;
+     
      fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -42,7 +44,7 @@ impl Renderer<TextParams> for TextRenderer {
             return;
         }
 
-        let mut font_system = FontSystem::new();
+        let font_system = FontSystem::new();
         let swash_cache = SwashCache::new();
         let mut cache = Cache::new(device);
         let mut atlas = TextAtlas::new(device, queue, &mut cache, config.format);
@@ -66,8 +68,7 @@ impl Renderer<TextParams> for TextRenderer {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        data: &TextParams,
+        config: &wgpu::SurfaceConfiguration, 
     ) {
         let Some(state) = &mut self.state else {
             return;
@@ -94,7 +95,7 @@ impl Renderer<TextParams> for TextRenderer {
 
         let mut prepared: Vec<PreparedItem> = Vec::new();
 
-        for group in &data.groups {
+        for group in &self.data.groups {
             let color = group.style.color;
             let glyphon_color = Color::rgba(color.r, color.g, color.b, color.a);
 

@@ -5,6 +5,8 @@ use winit::event_loop::ActiveEventLoop;
 
 pub mod scene;
 pub mod input;
+pub mod gui;
+pub mod gui_builder;
 
 use crate::graphics_context::config::RendererConfig;
 use crate::{
@@ -30,7 +32,7 @@ impl Engine {
         width:  u32,
         height: u32,
         config: RendererConfig,      
-        scene:  Box<dyn Scene>,                  
+        mut scene:  Box<dyn Scene>,                  
     ) -> Result<Self, RendererError> {
         tracing::info!("Engine initializing {}x{}", width, height);
         let mut renderer = GraphicsContext::new(window, width, height, config).await?;

@@ -5,3 +5,4 @@ pub mod node;
 pub mod name;
 pub mod config;
 pub mod schema;
+pub mod change;

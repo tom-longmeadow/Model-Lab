@@ -1,5 +1,5 @@
  use crate::{prelude::{Propertied, PropertyConfig, PropertyError, PropertyName, PropertyValue, 
-    PropertyValueKind, UnitSystem}, unit::UnitSettings};
+    PropertyValueKind, UnitSystem}, property::change::{ChangeCollector, ChangeMap}, unit::UnitSettings};
 
 #[derive(Debug)]
 pub struct PropertySchema<C: PropertyConfig> {
@@ -82,27 +82,41 @@ impl<C: PropertyConfig> PropertySchema<C> {
         }
     }
 
+ 
+
+
     pub fn try_set_from_str(
-        &self, 
-        object: &mut impl Propertied<C>, 
-        input: &str, 
-        system: &UnitSystem<C>
+        &self,
+        object: &mut impl Propertied<C>,
+        input: &str,
+        system: &UnitSystem<C>,
+        changes: &mut ChangeMap,
+    ) -> Result<(), PropertyError> {
+        let parsed_value = self.try_parse(input, system)?;
+        self.try_set_from_value(object, parsed_value, changes)
+    }
+
+    pub fn try_set_from_value(
+        &self,
+        object: &mut impl Propertied<C>,
+        value: PropertyValue,
+        changes: &mut ChangeMap,
     ) -> Result<(), PropertyError> {
         if self.read_only {
             return Err(PropertyError::ReadOnly(self.name.to_string()));
         }
 
-        let parsed_value = self.try_parse(input, system)?;
-
-        let incoming_kind = PropertyValueKind::from(&parsed_value);
+        let incoming_kind = PropertyValueKind::from(&value);
         if incoming_kind != self.kind {
-            return Err(PropertyError::TypeMismatch { 
-                expected: self.kind, 
+            return Err(PropertyError::TypeMismatch {
+                expected: self.kind,
                 got: incoming_kind,
             });
         }
 
-        object.set_value(self.key, parsed_value);
+        let old_value = object.get_value(self.key);
+        object.set_value(self.key, value.clone());
+        changes.record_change(self.key, old_value, value);
         Ok(())
     }
 

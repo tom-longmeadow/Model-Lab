@@ -6,6 +6,7 @@ use crate::graphics_context::{
 
 /// A dedicated renderer that knows how to draw a slice of `Mesh` objects.
 pub struct MeshRenderer {
+    data: Vec<Mesh>,
     pipeline_tri: Option<wgpu::RenderPipeline>,
     pipeline_line: Option<wgpu::RenderPipeline>,
     uniform_buffer: Option<wgpu::Buffer>,
@@ -14,8 +15,9 @@ pub struct MeshRenderer {
 }
 
 impl MeshRenderer {
-    pub fn new() -> Self {
+    pub fn new(data: Vec<Mesh>) -> Self {
         Self {
+            data,
             pipeline_tri: None,
             pipeline_line: None,
             uniform_buffer: None,
@@ -25,7 +27,9 @@ impl MeshRenderer {
     }
 }
 
-impl Renderer<Vec<Mesh>> for MeshRenderer {
+impl Renderer for MeshRenderer {
+    type Data = Vec<Mesh>;
+
     fn prepare(
         &mut self,
         device: &wgpu::Device,
@@ -109,15 +113,14 @@ impl Renderer<Vec<Mesh>> for MeshRenderer {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        config: &wgpu::SurfaceConfiguration,
-        data: &Vec<Mesh>,
+        config: &wgpu::SurfaceConfiguration, 
     ) {
         if let Some(buf) = &self.uniform_buffer {
             let screen_size = [config.width as f32, config.height as f32];
             queue.write_buffer(buf, 0, bytemuck::cast_slice(&screen_size));
         }
 
-        self.buffers = data
+        self.buffers = self.data
             .iter()
             .map(|mesh| {
                 let gpu_verts: Vec<GpuVertex> =
