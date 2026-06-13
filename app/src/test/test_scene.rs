@@ -2,11 +2,11 @@ use std::sync::{Arc, Mutex};
 
 use base::{
     prelude::Locale, ui::{widgets::property_panel::PropertyPanel}, unit::{UnitSettings, UnitSystem}};
-use impls::examples::model::{ExampleModelConfig, ExampleUnitSettings};
+use impls::{examples::model::{ExampleModelConfig, ExampleUnitSettings}, simulation::particle::{AosVerletSim2d, VerletParticle2d}};
  
 use crate::{
     engine::{gui::Gui, gui_builder::GuiBuilder, input::InputState, scene::Scene}, 
-    graphics_context::{GraphicsContext, }, 
+    graphics_context::{GraphicsContext, pass::RenderPass, renderer::{Renderer, simulation::aos_renderer::AosSimulationRenderer}, vertex::GpuVertex }, 
     test::test_part::TestPart,
 };
 
@@ -14,14 +14,64 @@ pub struct TestScene {
     ui: Option<Gui>,
     part: Arc<Mutex<TestPart>>,
     units: UnitSystem<ExampleModelConfig>,
+
+    // // Simulation state - just add these fields directly
+    // sim: AosVerletSim2d<
+    //     fn() -> VerletParticle2d,           // Spawn function
+    //     fn(&impls::simulation::particle::AosStorage2d) -> Vec<f64>,  // Score function
+    // >,
+    // sim_pass: Option<RenderPass<AosSimulationRenderer<VerletParticle2d>>>,
 }
 
 impl TestScene {
     pub fn new() -> Self {
+        // // Define spawn function
+        // fn spawn_particle() -> VerletParticle2d {
+        //     use rand::Rng;
+        //     let mut rng = rand::thread_rng();
+        //     VerletParticle2d {
+        //         pos: [rng.gen_range(-0.5..0.5), rng.gen_range(-0.5..0.5)],
+        //         old_pos: [0.0, 0.0],
+        //         vel: [0.0, 0.0],
+        //         mass: 1.0,
+        //         radius: 0.01,
+        //     }
+        // }
+
+        // // Define score function
+        // fn score_particles(storage: &impls::simulation::particle::AosStorage2d) -> Vec<f64> {
+        //     storage.as_slice()
+        //         .iter()
+        //         .map(|p| {
+        //             let speed = (p.vel[0] * p.vel[0] + p.vel[1] * p.vel[1]).sqrt();
+        //             -speed  // Slowest = highest score
+        //         })
+        //         .collect()
+        // }
+
+        // // Use the constructor!
+        // let model = impls::simulation::particle::BoxModel2d::new(
+        //     [-1.0, -1.0],
+        //     [1.0, 1.0],
+        //     0.016, // dt
+        // );
+        
+        // let sim = impls::simulation::particle::new_aos_verlet_sim_2d(
+        //     60.0,                    // 60 ticks/sec
+        //     model,
+        //     0.8,                     // 80% fill ratio
+        //     0.001,                   // particle volume
+        //     || 4.0,                  // box volume (2x2 square)
+        //     spawn_particle,
+        //     score_particles,
+        // );
+
         Self {
             ui: None,
             part: Arc::new(Mutex::new(TestPart::new())),
             units: UnitSystem::new(ExampleUnitSettings::default()),
+            // sim,
+            // sim_pass: None,
         }
     }
 }
@@ -40,9 +90,38 @@ impl Scene for TestScene {
         self.ui = Some(result.gui);
         renderer.add_pass(result.mesh_pass);
         renderer.add_pass(result.text_pass);
+
+
+        // let initial_particles = self.sim.storage().as_slice().to_vec();
+        // let particle_renderer = AosSimulationRenderer::new(
+        //     initial_particles,
+        //     |p| GpuVertex {
+        //         position: [p.pos[0] as f32, p.pos[1] as f32, 0.0],
+        //         color: [1.0, 0.5, 0.2, 1.0],
+        //     }
+        // );
+        
+        // self.sim_pass = Some(RenderPass::new(particle_renderer));
+        // renderer.add_pass(Box::new(self.sim_pass.as_ref().unwrap()));
+        
     }
 
     fn update(&mut self, _input: &InputState) {
+
+
+        //  // 1. Run simulation (which internally uses ANY AosCpuStorage impl)
+        // self.sim.simulate(frame_time);
+        
+        // // 2. Extract via trait method - works for ANY AosCpuStorage
+        // let updated_data: Vec<VerletParticle2d> = 
+        //     self.sim.storage().as_slice().to_vec();  // Trait method → Vec
+        
+        // // 3. Pass Vec to renderer
+        // if let Some(pass) = &mut self.sim_pass {
+        //     pass.renderer.update_data(updated_data);
+        // }
+
+
         if let Some(ui) = &mut self.ui {
             // In a real update loop, you would:
             // 1. Handle input events and update the ChangeMap in the Gui.
@@ -59,6 +138,16 @@ impl Scene for TestScene {
             // let mut measurer = GlyphonTextMeasurer::new();
             // ui.layout(screen_size, &mut measurer);
         }
+
+        // // Update simulation
+        // self.sim.simulate(0.016); // ~60 FPS
+        
+        // // Extract and pass to renderer
+        // let updated_particles = self.sim.storage().as_slice().to_vec();
+        // if let Some(pass) = &mut self.sim_pass {
+        //     pass.renderer.update_data(updated_particles);
+        // }
+
     }
 
     fn update_passes(&mut self, renderer: &mut GraphicsContext) {

@@ -2,7 +2,7 @@ use base::{mesh::Mesh, ui::{layout::{layout_params::LayoutParams, size::Size},
 text::params::{TextGroup, TextParams}, widget::{Widget, collect_text}}};
 
 use crate::{engine::gui::Gui, graphics_context::{GraphicsContext, 
-    pass::{RenderPass}, renderer::{mesh_renderer::MeshRenderer, text_renderer::TextRenderer}}, 
+    pass::{RenderPass}, renderer::{mesh::MeshRenderer, text::TextRenderer}}, 
     ui::{mesh_builder::UiMeshBuilder, text_measurer::GlyphonTextMeasurer}};
 
 

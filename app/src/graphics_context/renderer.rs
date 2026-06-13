@@ -1,6 +1,6 @@
-pub mod mesh_renderer;
-pub mod particle_renderer;
-pub mod text_renderer;
+pub mod mesh;
+pub mod simulation;
+pub mod text; 
 
 use wgpu::{Device, Queue, SurfaceConfiguration};
 
@@ -14,7 +14,7 @@ pub trait Renderer {
     fn prepare(&mut self, device: &Device, queue: &Queue, config: &SurfaceConfiguration);
 
     /// Update the renderer's internal data.
-    //fn update_data(&mut self, data: Self::Data);
+    fn update_data(&mut self, data: Self::Data){}
 
     /// Update GPU buffers with the latest data from its internal state.
     /// This is called every frame before `draw`.
