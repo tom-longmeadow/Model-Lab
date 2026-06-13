@@ -1,14 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use base::{
-    mesh::Mesh, prelude::Locale, ui::{layout::{layout_params::LayoutParams, size::Size}, text::params::{TextGroup, TextParams}, widget::collect_text, widgets::property_panel::PropertyPanel}, unit::{UnitSettings, UnitSystem}};
+    prelude::Locale, ui::{widgets::property_panel::PropertyPanel}, unit::{UnitSettings, UnitSystem}};
 use impls::examples::model::{ExampleModelConfig, ExampleUnitSettings};
  
 use crate::{
     engine::{gui::Gui, gui_builder::GuiBuilder, input::InputState, scene::Scene}, 
-    graphics_context::{GraphicsContext, pass::RenderPass, renderer::{mesh_renderer::MeshRenderer, text_renderer::TextRenderer}}, 
+    graphics_context::{GraphicsContext, }, 
     test::test_part::TestPart,
-    ui::{mesh_builder::UiMeshBuilder, text_measurer::GlyphonTextMeasurer}
 };
 
 pub struct TestScene {
