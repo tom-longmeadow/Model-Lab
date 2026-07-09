@@ -8,6 +8,7 @@ impl SymplecticEuler {
         *vel += acc * dt;
         *pos += *vel * dt;
     }
+
 }
 
 /// `pos_new = 2·pos − pos_old + acc·dt²`,  `pos_old ← pos`,  `pos ← pos_new`
@@ -19,6 +20,27 @@ impl Verlet {
         *pos_old = *pos;
         *pos     = new;
     }
+}
+
+/// Velocity Verlet — split into two half-kicks around a force recompute.
+///
+/// Sequence per substep (driven by the solver):
+///   1. `step1` — `pos += vel·dt + ½·acc·dt²`,  `vel += ½·acc·dt`  (current acc)
+///   2. recompute forces at new positions
+///   3. `step2` — `vel += ½·acc_new·dt`
+pub struct VelocityVerlet;
+impl VelocityVerlet {
+    #[inline(always)]
+    pub fn step1(pos: &mut f64, vel: &mut f64, acc: f64, dt: f64) {
+        *pos += *vel * dt + 0.5 * acc * dt * dt;
+        *vel += 0.5 * acc * dt;
+    }
+
+    #[inline(always)]
+    pub fn step2(vel: &mut f64, acc: f64, dt: f64) {
+        *vel += 0.5 * acc * dt;
+    }
+
 }
 
 /// Symplectic leapfrog — split into half-kick and drift so forces can be
@@ -42,25 +64,7 @@ impl Leapfrog {
     }
 }
 
-/// Velocity Verlet — split into two half-kicks around a force recompute.
-///
-/// Sequence per substep (driven by the solver):
-///   1. `step1` — `pos += vel·dt + ½·acc·dt²`,  `vel += ½·acc·dt`  (current acc)
-///   2. recompute forces at new positions
-///   3. `step2` — `vel += ½·acc_new·dt`
-pub struct VelocityVerlet;
-impl VelocityVerlet {
-    #[inline(always)]
-    pub fn step1(pos: &mut f64, vel: &mut f64, acc: f64, dt: f64) {
-        *pos += *vel * dt + 0.5 * acc * dt * dt;
-        *vel += 0.5 * acc * dt;
-    }
 
-    #[inline(always)]
-    pub fn step2(vel: &mut f64, acc: f64, dt: f64) {
-        *vel += 0.5 * acc * dt;
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Tests

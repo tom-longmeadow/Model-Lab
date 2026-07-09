@@ -13,10 +13,10 @@ pub struct GpuVertex {
 impl From<base::mesh::vertex::Vertex> for GpuVertex {
     fn from(v: base::mesh::vertex::Vertex) -> Self {
         Self {
-            position: v.position,
-            normal:   v.normal,
-            uv:       v.uv,
-            color:    v.color,
+            position: v.position.into(),
+            normal:   v.normal.into(),
+            uv:       v.uv.into(),
+            color:    v.color.into(),
         }
     }
 }

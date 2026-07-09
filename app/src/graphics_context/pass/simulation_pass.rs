@@ -1,53 +1,55 @@
-// use crate::graphics_context::{pass::Pass, renderer::Renderer};
-// use base::sim::simulation::Simulate;
+use base::sim::{simulation::Simulate, storage::AosCpuStorage};
+use crate::graphics_context::{pass::Pass, renderer::Renderer};
 
-// /// A specialized render pass for running and drawing a simulation.
-// /// It implements the `Pass` trait but adds the crucial step of calling `simulate()`
-// /// during the `update` phase.
-// pub struct SimulationPass<S>
-// where
-//     S: Simulate,
-// {
-//     pub simulation: S,
-//     renderer: Box<dyn Renderer<S::Storage>>,
-// }
+/// A render pass that owns a simulation and drives both its advancement and rendering.
+///
+/// On each frame `update()`:
+///   1. Advances the simulation by `dt` seconds
+///   2. Clones the current storage slice into the renderer
+///   3. Uploads that data to the GPU
+pub struct SimulationPass<S, R>
+where
+    S: Simulate,
+    S::Storage: AosCpuStorage,
+    R: Renderer<Data = Vec<<S::Storage as AosCpuStorage>::Item>>,
+{
+    simulation: S,
+    renderer: R,
+    dt: f64,
+}
 
-// impl<S> SimulationPass<S>
-// where
-//     S: Simulate,
-// {
-//     pub fn new(simulation: S, renderer: impl Renderer<S::Storage> + 'static) -> Self {
-//         Self {
-//             simulation,
-//             renderer: Box::new(renderer),
-//         }
-//     }
-// }
+impl<S, R> SimulationPass<S, R>
+where
+    S: Simulate,
+    S::Storage: AosCpuStorage,
+    <S::Storage as AosCpuStorage>::Item: Clone,
+    R: Renderer<Data = Vec<<S::Storage as AosCpuStorage>::Item>>,
+{
+    pub fn new(simulation: S, renderer: R, dt: f64) -> Self {
+        Self { simulation, renderer, dt }
+    }
+}
 
-// impl<S> Pass for SimulationPass<S>
-// where
-//     S: Simulate + 'static, // Add 'static bound for boxing
-// {
-//     fn prepare(
-//         &mut self,
-//         device: &wgpu::Device,
-//         _queue: &wgpu::Queue,
-//         config: &wgpu::SurfaceConfiguration,
-//     ) {
-//         self.renderer.prepare(device, _queue, config);
-//     }
+impl<S, R> Pass for SimulationPass<S, R>
+where
+    S: Simulate + 'static,
+    S::Storage: AosCpuStorage,
+    <S::Storage as AosCpuStorage>::Item: Clone + 'static,
+    R: Renderer<Data = Vec<<S::Storage as AosCpuStorage>::Item>> + 'static,
+{
+    fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
+        self.renderer.prepare(device, queue, config);
+    }
 
-//     fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
-//         // 1. Advance the simulation state.
-//         self.simulation.simulate(1.0 / 60.0); // Assuming 60 FPS for now
+    fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
+        self.simulation.simulate(self.dt);
+        let data = self.simulation.storage().as_slice().to_vec();
+        self.renderer.update_data(data);
+        self.renderer.update(device, queue, config);
+    }
 
-//         // 2. Pass the updated storage to the renderer so it can update its GPU buffers.
-//         self.renderer.update(device, queue, config, self.simulation.storage());
-//     }
-
-//     fn draw<'a>(&'a mut self, pass: &mut wgpu::RenderPass<'a>) {
-//         // Delegate the actual draw calls to the specialized renderer.
-//         self.renderer.draw(pass);
-//     }
-// }
+    fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
+        self.renderer.draw(pass);
+    }
+}
  

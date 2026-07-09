@@ -25,10 +25,10 @@ fn quad_square(rect: Rect, color: Color) -> Mesh {
     let y1 = rect.y + rect.h;
 
     let vertices = vec![
-        Vertex::new([x0, y0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], [r, g, b, a]),
-        Vertex::new([x1, y0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0], [r, g, b, a]),
-        Vertex::new([x1, y1, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0], [r, g, b, a]),
-        Vertex::new([x0, y1, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0], [r, g, b, a]),
+        Vertex::from_arrays([x0, y0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], [r, g, b, a]),
+        Vertex::from_arrays([x1, y0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0], [r, g, b, a]),
+        Vertex::from_arrays([x1, y1, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0], [r, g, b, a]),
+        Vertex::from_arrays([x0, y1, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0], [r, g, b, a]),
     ];
 
     let indices = vec![0, 1, 2, 2, 3, 0];

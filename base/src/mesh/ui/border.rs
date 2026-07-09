@@ -115,7 +115,7 @@ pub fn perimeter_vertices(rect: Rect, corner: CornerStyle, color: [f32; 4]) -> V
             let angle = start_angle + t * (PI / 2.0);
             let x = cx + angle.cos() * radius;
             let y = cy + angle.sin() * radius;
-            vertices.push(Vertex::new([x, y, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], color));
+            vertices.push(Vertex::from_arrays([x, y, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], color));
         }
     }
 

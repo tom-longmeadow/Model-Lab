@@ -1,10 +1,3 @@
-pub mod newtonian;
-pub mod verlet;
-pub mod aos_vec;
-pub mod soa_vec;
-
-pub use aos_vec::AosVecStorage;
-pub use soa_vec::SoaVecStorage;
 
 
 /// Represents any simulation storage.
