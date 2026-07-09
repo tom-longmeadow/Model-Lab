@@ -33,8 +33,8 @@ impl TextRenderer {
 
 impl Renderer for TextRenderer {
     type Data = TextParams;
-     
-     fn prepare(
+
+    fn prepare(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -61,6 +61,10 @@ impl Renderer for TextRenderer {
             viewport,
             renderer, 
         });
+    }
+
+    fn update_data(&mut self, data: Self::Data) {
+        self.data = data;
     }
 
     /// Updates the text buffer and prepares glyphs for rendering.
@@ -103,7 +107,7 @@ impl Renderer for TextRenderer {
                 // Create a fresh buffer for this specific text item.
                 let mut buffer = Buffer::new(
                     &mut state.font_system,
-                    Metrics::new(30.0, 42.0),
+                    Metrics::new(group.style.font_size, group.style.line_height),
                 );
 
                 // Size the buffer to the item's own width, not the full screen.

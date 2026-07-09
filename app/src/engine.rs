@@ -54,7 +54,7 @@ impl Engine {
                 event_loop.exit();
             }
             WindowEvent::Resized(size)   => {
-                tracing::debug!("Resize {}x{}", size.width, size.height);
+                tracing::info!("Resize {}x{}", size.width, size.height);
                 self.graphics.resize(size.width, size.height);
             }
             WindowEvent::RedrawRequested => self.render(event_loop),
@@ -64,7 +64,7 @@ impl Engine {
  
 
      fn render(&mut self, event_loop: &ActiveEventLoop) {
-        tracing::info!("Rendering...");
+        tracing::trace!("Rendering...");
 
         // Begin frame, update scene logic
         self.input.begin_frame();

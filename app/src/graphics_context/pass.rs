@@ -1,4 +1,4 @@
-pub mod simulation_pass;
+pub mod hud;
 
 use super::renderer::Renderer;
 

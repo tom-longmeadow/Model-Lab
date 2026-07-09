@@ -10,6 +10,7 @@ pub mod buffers;
 pub mod vertex; 
 pub mod renderer;
 pub mod shader;
+pub mod simulation;
 
 use crate::graphics_context::{
     config::RendererConfig,

@@ -63,7 +63,9 @@ impl ApplicationHandler for DesktopApp {
 }
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
     let app_name = env::args().nth(1).unwrap_or_else(|| "test".to_string());
     

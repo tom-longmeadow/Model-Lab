@@ -31,30 +31,19 @@ impl ShaderBuilder {
     /// A shader for simple, colored AOS particles drawn as circles.
     pub fn aos_color_particle() -> Self {
         Self::new(
-            VertexOutput::Color,
+            VertexOutput::ColorUv,
             VertexFunction::ParticleAosColor,
             FragmentFunction::Circular,
         )
-        .with_vertex_input(VertexInput::Color)
+        .with_vertex_input(VertexInput::ColorUv)
         .label("AOS Color Particle")
-    }
-
-    /// A shader for variable-radius, colored AOS particles drawn as circles.
-    pub fn aos_radius_color_particle() -> Self {
-        Self::new(
-            VertexOutput::RadiusColor,
-            VertexFunction::ParticleAosRadiusColor,
-            FragmentFunction::Circular,
-        )
-        .with_vertex_input(VertexInput::RadiusColor)
-        .label("AOS Radius-Color Particle")
     }
 
     /// A shader for simple, colored SOA particles drawn as circles.
     pub fn soa_color_particle() -> Self {
         // Note: No .with_vertex_input() call for SOA
         Self::new(
-            VertexOutput::Color,
+            VertexOutput::ColorUv,
             VertexFunction::ParticleSoaColor,
             FragmentFunction::Circular,
         )

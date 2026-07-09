@@ -1,9 +1,11 @@
-use crate::sim::{clock::Clock, lifecycle::Lifecycle, solver::Solver, storage::Storage};
+use std::time::Instant;
+use crate::sim::{clock::Clock, lifecycle::Lifecycle, metrics::SimMetrics, solver::Solver, storage::Storage};
 
 pub trait Simulate {
-    type Storage: Storage; // <-- Add this line
+    type Storage: Storage;
     fn simulate(&mut self, frame_time: f64);
-    fn storage(&self) -> &Self::Storage; // <-- Add this line
+    fn storage(&self) -> &Self::Storage;
+    fn metrics(&self) -> &SimMetrics;
 }
 
 /// Owns and coordinates the three components of a simulation.
@@ -19,6 +21,7 @@ where
     solver:    Sv,
     lifecycle: Lc,
     clock:     Clock,
+    metrics:   SimMetrics,
 }
 
 impl<St, Sv, Lc> Simulation<St, Sv, Lc>
@@ -30,7 +33,8 @@ where
     /// Creates a new simulation running at `hz` ticks per second.
     /// Calls `lifecycle.init` and `solver.init`.
     pub fn new(hz: f64, storage: St, solver: Sv, lifecycle: Lc) -> Self {
-        let mut sim = Self { storage, solver, lifecycle, clock: Clock::new(hz) };
+        let mut sim = Self { storage, solver, lifecycle, clock: Clock::new(hz), metrics: SimMetrics::default() };
+        sim.metrics.hz = hz;
         sim.solver.init(&mut sim.storage);
         sim
     }
@@ -55,25 +59,48 @@ where
         let subs  = self.solver.substep_count().max(1);
         let dt    = self.clock.fixed_dt() / subs as f64;
 
+        let mut total_step_ns: u128 = 0;
+        let mut total_sub_ns:  u128 = 0;
+        let mut sub_count:     usize = 0;
+
         for step in 0..steps {
             let current_tick = tick + step as u64;
+            let step_start = Instant::now();
 
             self.storage.pre_step();
             self.lifecycle.tick(&mut self.storage, current_tick);
 
             self.solver.pre_step(&mut self.storage, dt, current_tick);
             for _ in 0..subs {
+                let sub_start = Instant::now();
                 self.solver.sub_step(&mut self.storage, dt);
+                total_sub_ns += sub_start.elapsed().as_nanos();
+                sub_count += 1;
             }
             self.solver.post_step(&mut self.storage, dt);
 
             self.storage.post_step();
+            total_step_ns += step_start.elapsed().as_nanos();
         }
+
+        self.metrics.steps_per_frame  = steps;
+        self.metrics.total_ticks      = self.clock.tick();
+        self.metrics.accumulator_ms   = self.clock.accumulator() * 1000.0;
+        self.metrics.step_time_ms     = if steps > 0 {
+            (total_step_ns as f64 / steps as f64) / 1_000_000.0
+        } else { 0.0 };
+        self.metrics.substep_time_ms  = if sub_count > 0 {
+            (total_sub_ns as f64 / sub_count as f64) / 1_000_000.0
+        } else { 0.0 };
     }
 
 
     fn storage(&self) -> &Self::Storage {
         &self.storage
+    }
+
+    fn metrics(&self) -> &SimMetrics {
+        &self.metrics
     }
 }
 

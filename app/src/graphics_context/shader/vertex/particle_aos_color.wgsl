@@ -1,10 +1,11 @@
 
 
 @vertex
-fn vs_main(model: VertexInput) -> VertexOutput {
+fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(model.position, 1.0);
-    out.color = model.color;
+    out.position = vec4<f32>(in.position, 1.0);
+    out.color = in.color;
+    out.uv = in.uv;
     return out;
 }
 
