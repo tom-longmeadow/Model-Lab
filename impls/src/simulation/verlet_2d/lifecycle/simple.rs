@@ -1,6 +1,6 @@
-use base::sim::{lifecycle::Lifecycle, storage::AosCpuStorage};
+use base::sim::{lifecycle::Lifecycle, storage::AosCpuStorage, Bounds};
 
-use crate::simulation::verlet_2d::{particle::Particle, vec_storage::VecStorage};
+use crate::simulation::verlet_2d::{particle::Particle, aos_vec_storage::AosVecStorage};
 
 
 pub struct SimpleLifecycle {
@@ -13,10 +13,10 @@ impl SimpleLifecycle {
     }
 }
 
-impl Lifecycle<VecStorage> for SimpleLifecycle {
-    fn tick(&mut self, storage: &mut VecStorage, _tick: u64) {
+impl Lifecycle<AosVecStorage> for SimpleLifecycle {
+    fn tick(&mut self, storage: &mut AosVecStorage, _tick: u64, _bounds: &Bounds) {
         if !self.spawned {
-            storage.push(Particle::default());
+            storage.push(Particle::new(150.0, 150.0, 100.0));
             self.spawned = true;
         }
     }

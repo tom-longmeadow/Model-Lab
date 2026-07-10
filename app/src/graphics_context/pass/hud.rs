@@ -64,12 +64,6 @@ impl HudState {
 /// `HudPass` measures its own frame time and writes "FPS" and "Frame" into the
 /// shared state automatically. All other metrics are written externally:
 ///
-/// ```rust
-/// // In a simulation step:
-/// hud_state.lock().unwrap().set("Sim step", format!("{:.3} ms", step_ms));
-/// // In the scene update:
-/// hud_state.lock().unwrap().set("Particles", format!("{}", count));
-/// ```
 pub struct HudPass {
     state: Arc<Mutex<HudState>>,
     renderer: TextRenderer,

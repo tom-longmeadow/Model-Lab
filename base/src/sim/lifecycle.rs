@@ -1,12 +1,12 @@
 pub mod creator;
 pub mod deletor;
 
-use crate::sim::storage::Storage;
+use crate::sim::{storage::Storage, Bounds};
 
 /// Controls how and when new state enters and leaves the simulation.
 /// Implement this directly — compose [`Creator`] and [`Deletor`] as fields.
 pub trait Lifecycle<S: Storage> {
-    fn tick(&mut self, _storage: &mut S, _tick: u64);
+    fn tick(&mut self, _storage: &mut S, _tick: u64, _bounds: &Bounds);
 }
 
 /// Knows the population goal: how many items to add or remove this tick.

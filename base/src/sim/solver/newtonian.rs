@@ -61,6 +61,19 @@ impl<const N: usize> BallConstraint<N> {
     }
 }
 
+/// Clamp a coordinate to `[min, max]`, reflecting velocity on contact.
+/// `restitution` ∈ `[0.0, 1.0]` — `1.0` = perfectly elastic, `0.0` = fully inelastic.
+#[inline(always)]
+fn apply_axis_constraint(min: f64, max: f64, restitution: f64, pos: &mut f64, vel: &mut f64) {
+    if *pos < min {
+        *pos = min;
+        *vel = -(*vel) * restitution;  // reflect velocity
+    } else if *pos > max {
+        *pos = max;
+        *vel = -(*vel) * restitution;
+    }
+}
+
 /// Clamp a particle to `[min, max]` along one dimension, reflecting velocity on contact.
 /// `restitution` ∈ `[0.0, 1.0]` — `1.0` = perfectly elastic, `0.0` = fully inelastic.
 pub struct AxisConstraint {
@@ -72,13 +85,29 @@ impl AxisConstraint {
     pub fn new(min: f64, max: f64, restitution: f64) -> Self { Self { min, max, restitution } }
     #[inline(always)]
     pub fn apply(&self, pos: &mut f64, vel: &mut f64) {
-        if *pos < self.min {
-            *pos = self.min;
-            *vel = vel.abs() * self.restitution;
-        } else if *pos > self.max {
-            *pos = self.max;
-            *vel = -vel.abs() * self.restitution;
-        }
+        apply_axis_constraint(self.min, self.max, self.restitution, pos, vel);
+    }
+}
+
+/// Clamp a particle inside a rectangle `[x_min, x_max] × [y_min, y_max]`.
+/// Reflects velocity on contact with each boundary independently.
+/// `restitution` ∈ `[0.0, 1.0]` applies to both axes.
+pub struct RectConstraint {
+    pub x_min: f64,
+    pub x_max: f64,
+    pub y_min: f64,
+    pub y_max: f64,
+    pub restitution: f64,
+}
+impl RectConstraint {
+    pub fn new(x_min: f64, x_max: f64, y_min: f64, y_max: f64, restitution: f64) -> Self {
+        Self { x_min, x_max, y_min, y_max, restitution }
+    }
+
+    #[inline(always)]
+    pub fn apply(&self, x_pos: &mut f64, x_vel: &mut f64, y_pos: &mut f64, y_vel: &mut f64) {
+        apply_axis_constraint(self.x_min, self.x_max, self.restitution, x_pos, x_vel);
+        apply_axis_constraint(self.y_min, self.y_max, self.restitution, y_pos, y_vel);
     }
 }
 
@@ -91,6 +120,59 @@ mod tests {
     use super::*;
 
     const EPS: f64 = 1e-12;
+
+     // -----------------------------------------------------------------------
+    // NewtonianRectConstraint
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn newtonian_rect_clamps_both_axes_independently() {
+        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let mut x_pos = 1.5;
+        let mut x_vel = 2.0;   // moving toward +x
+        let mut y_pos = -2.3;
+        let mut y_vel = -3.0;  // moving toward -y
+        c.apply(&mut x_pos, &mut x_vel, &mut y_pos, &mut y_vel);
+        
+        // x clamped to max, vel reflected
+        assert!((x_pos - 1.0).abs() < EPS);
+        assert!((x_vel - (-2.0)).abs() < EPS);
+        
+        // y clamped to min, vel reflected
+        assert!((y_pos - (-2.0)).abs() < EPS);
+        assert!((y_vel - 3.0).abs() < EPS);
+    }
+
+    #[test]
+    fn newtonian_rect_inside_bounds_no_effect() {
+        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let mut x_pos = 0.5;
+        let mut x_vel = 1.0;
+        let mut y_pos = 1.0;
+        let mut y_vel = 0.5;
+        c.apply(&mut x_pos, &mut x_vel, &mut y_pos, &mut y_vel);
+        
+        assert!((x_pos - 0.5).abs() < EPS);
+        assert!((x_vel - 1.0).abs() < EPS);
+        assert!((y_pos - 1.0).abs() < EPS);
+        assert!((y_vel - 0.5).abs() < EPS);
+    }
+
+    #[test]
+    fn newtonian_rect_corner_collision_reflects_both() {
+        let c = RectConstraint::new(0.0, 1.0, 0.0, 1.0, 0.6);
+        let mut x_pos = -0.1;
+        let mut x_vel = -5.0;
+        let mut y_pos = 1.2;
+        let mut y_vel = 4.0;
+        c.apply(&mut x_pos, &mut x_vel, &mut y_pos, &mut y_vel);
+        
+        assert!((x_pos - 0.0).abs() < EPS);
+        assert!((x_vel - 3.0).abs() < EPS);  // 5.0 * 0.6
+        
+        assert!((y_pos - 1.0).abs() < EPS);
+        assert!((y_vel - (-2.4)).abs() < EPS);  // -4.0 * 0.6
+    }
 
     // -----------------------------------------------------------------------
     // NewtonianLinearDrag

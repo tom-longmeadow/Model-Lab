@@ -1,6 +1,6 @@
 use base::sim::storage::Storage;
 
-use crate::graphics_context::renderer::Renderer;
+use crate::graphics_context::{renderer::Renderer, simulation::Transform};
 
  
 
@@ -17,5 +17,9 @@ use crate::graphics_context::renderer::Renderer;
 /// - A GPU-native renderer could implement it by recording a buffer copy command
 pub trait SimulationRenderer<S: Storage>: Renderer {
     fn sync(&mut self, storage: &S, config: &wgpu::SurfaceConfiguration);
+    
+    /// Update the coordinate transform from simulation space to NDC.
+    /// Called by SimulationPass when the window is resized.
+    fn set_transform(&mut self, transform: Transform);
 }
  

@@ -7,45 +7,92 @@ use crate::graphics_context::{
         vertex::VertexFunction,
         vertex_input::VertexInput,
         vertex_output::VertexOutput,
-    }, simulation::renderer::SimulationRenderer, vertex::GpuVertex
+    }, simulation::{renderer::SimulationRenderer, Transform}, vertex::GpuVertex
 };
 
-/// A renderer for ANY AoS simulation data.
+/// Per-particle instance data sent to GPU
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ParticleInstance {
+    pub position: [f32; 3],  // Simulation space position (note: field name must match WGSL)
+    pub radius_x: f32,       // Particle X radius in NDC units (compensates for aspect)
+    pub radius_y: f32,       // Particle Y radius in NDC units (compensates for aspect)
+    pub color: [f32; 4],     // RGBA color
+    pub _padding: f32,       // Align to 16 bytes
+}
+
+impl ParticleInstance {
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<ParticleInstance>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                // position
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // radius_x
+                wgpu::VertexAttribute {
+                    offset: 12,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                // radius_y
+                wgpu::VertexAttribute {
+                    offset: 16,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32,
+                },
+                // color
+                wgpu::VertexAttribute {
+                    offset: 20,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        }
+    }
+}
+
+/// A renderer for ANY AoS simulation data using instanced rendering.
 ///
-/// Each item is rendered as a colored quad in NDC space. The `to_vertex` closure
-/// maps an item to a center `GpuVertex` (position in NDC, color). The renderer
-/// expands that into 6 vertices (2 triangles) forming a `quad_size`-radius square.
-///
-/// Uses the NDC passthrough vertex shader — positions are in [-1, 1] clip space.
+/// Renders each particle as a quad. Uses one static unit quad vertex buffer,
+/// and a per-particle instance buffer containing position, radius, color.
+/// GPU scales and positions each instance.
 pub struct AosSimulationRenderer<I> {
-    to_vertex: Box<dyn Fn(&I) -> GpuVertex>,
-    quad_size: f32,
-    /// Persistent CPU-side staging buffer. Grown as needed, never shrunk.
-    /// Eliminates a per-frame heap allocation.
-    staged: Vec<GpuVertex>,
+    to_instance: Box<dyn Fn(&I) -> ParticleInstance>,
+    /// Persistent CPU-side staging buffer for instance data
+    staged_instances: Vec<ParticleInstance>,
     pipeline: Option<wgpu::RenderPipeline>,
-    vertex_buffer: Option<wgpu::Buffer>,
-    vertex_count: u32,
+    unit_quad_buffer: Option<wgpu::Buffer>,  // Static 6-vertex unit quad
+    instance_buffer: Option<wgpu::Buffer>,
+    instance_count: u32,
+    transform: Transform,
 }
 
 impl<I> AosSimulationRenderer<I> {
-    /// Create a new renderer.
+    /// Create a new instanced particle renderer.
     ///
-    /// - `initial_data`: snapshot of simulation items
-    /// - `to_vertex`: maps an item to a center `GpuVertex` (position = NDC, color = particle color)
-    /// - `quad_size`: half-size of the rendered quad in NDC units (e.g. `0.05` = visible square)
+    /// - `to_instance`: maps an item to instance data (position, radius, color)
     pub fn new(
-        to_vertex: impl Fn(&I) -> GpuVertex + 'static,
-        quad_size: f32,
+        to_instance: impl Fn(&I) -> ParticleInstance + 'static,
     ) -> Self {
         Self {
-            to_vertex: Box::new(to_vertex),
-            quad_size,
-            staged: Vec::new(),
+            to_instance: Box::new(to_instance),
+            staged_instances: Vec::new(),
             pipeline: None,
-            vertex_buffer: None,
-            vertex_count: 0,
+            unit_quad_buffer: None,
+            instance_buffer: None,
+            instance_count: 0,
+            transform: Transform::identity(),
         }
+    }
+
+    /// Update the coordinate transform from simulation space to NDC.
+    pub fn set_transform(&mut self, transform: Transform) {
+        self.transform = transform;
     }
 }
 
@@ -62,30 +109,45 @@ impl<I: 'static> Renderer for AosSimulationRenderer<I> {
             return;
         }
 
-        // NDC passthrough vertex + plain color fragment.
-        // The Circular fragment shader uses `point_coord` which is only valid for PointList.
+        // Create static unit quad vertices (from -1 to 1)
+        let unit_quad_vertices = [
+            GpuVertex { position: [-1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [0.0, 0.0], color: [1.0; 4] },
+            GpuVertex { position: [ 1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 0.0], color: [1.0; 4] },
+            GpuVertex { position: [ 1.0,  1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 1.0], color: [1.0; 4] },
+            GpuVertex { position: [-1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [0.0, 0.0], color: [1.0; 4] },
+            GpuVertex { position: [ 1.0,  1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 1.0], color: [1.0; 4] },
+            GpuVertex { position: [-1.0,  1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [0.0, 1.0], color: [1.0; 4] },
+        ];
+
+        self.unit_quad_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Unit Quad Vertex Buffer"),
+            contents: bytemuck::cast_slice(&unit_quad_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        }));
+
+        // Instanced particle shader
         let shader = ShaderBuilder::new(
             VertexOutput::ColorUv,
-            VertexFunction::ParticleAosColor,
+            VertexFunction::ParticleAosInstanced,
             FragmentFunction::Circular,
         )
         .with_vertex_input(VertexInput::ColorUv)
-        .label("AOS Simulation Quad Shader")
+        .label("AOS Instanced Simulation Shader")
         .build(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("AOS Simulation Pipeline Layout"),
+            label: Some("AOS Instanced Simulation Pipeline Layout"),
             bind_group_layouts: &[],
             immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("AOS Simulation Pipeline"),
+            label: Some("AOS Instanced Simulation Pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[GpuVertex::layout()],
+                buffers: &[GpuVertex::layout(), ParticleInstance::layout()],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -119,62 +181,64 @@ impl<I: 'static> Renderer for AosSimulationRenderer<I> {
         queue: &wgpu::Queue,
         _config: &wgpu::SurfaceConfiguration,
     ) {
-        if self.staged.is_empty() {
-            self.vertex_count = 0;
+        if self.staged_instances.is_empty() {
+            self.instance_count = 0;
             return;
         }
 
-        self.vertex_count = self.staged.len() as u32;
-        let required_size = (self.staged.len() * std::mem::size_of::<GpuVertex>()) as u64;
-        if let Some(buf) = &self.vertex_buffer {
+        self.instance_count = self.staged_instances.len() as u32;
+        let required_size = (self.staged_instances.len() * std::mem::size_of::<ParticleInstance>()) as u64;
+        if let Some(buf) = &self.instance_buffer {
             if buf.size() >= required_size {
-                queue.write_buffer(buf, 0, bytemuck::cast_slice(&self.staged));
+                queue.write_buffer(buf, 0, bytemuck::cast_slice(&self.staged_instances));
                 return;
             }
         }
-        self.vertex_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("AOS Simulation Vertex Buffer"),
-            contents: bytemuck::cast_slice(&self.staged),
+        self.instance_buffer = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("AOS Simulation Instance Buffer"),
+            contents: bytemuck::cast_slice(&self.staged_instances),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         }));
     }
 
     fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
-        if self.vertex_count == 0 || self.vertex_buffer.is_none() || self.pipeline.is_none() {
+        if self.instance_count == 0 || self.unit_quad_buffer.is_none() || self.instance_buffer.is_none() || self.pipeline.is_none() {
             return;
         }
         pass.set_pipeline(self.pipeline.as_ref().unwrap());
-        pass.set_vertex_buffer(0, self.vertex_buffer.as_ref().unwrap().slice(..));
-        pass.draw(0..self.vertex_count, 0..1);
+        pass.set_vertex_buffer(0, self.unit_quad_buffer.as_ref().unwrap().slice(..));
+        pass.set_vertex_buffer(1, self.instance_buffer.as_ref().unwrap().slice(..));
+        pass.draw(0..6, 0..self.instance_count);  // 6 vertices per quad, N instances
     }
 }
 
 /// Implement `SimulationRenderer` generically for any `AosCpuStorage` whose item matches `I`.
-/// This means `AosSimulationRenderer<Particle>` works with `VecStorage`, or any other
-/// AoS storage that holds `Particle` — without needing a new renderer type.
 impl<I: Clone + 'static, S: AosCpuStorage<Item = I>> SimulationRenderer<S> for AosSimulationRenderer<I> {
-    /// Expand simulation storage directly into the GPU staging buffer.
-    /// No intermediate `Vec<I>` clone — `self.staged` is reused across frames.
-    fn sync(&mut self, storage: &S, config: &wgpu::SurfaceConfiguration) {
+    /// Collect instance data from storage. Transform positions from simulation space to NDC on CPU.
+    fn sync(&mut self, storage: &S, _config: &wgpu::SurfaceConfiguration) {
         let items = storage.as_slice();
-        let aspect = config.height as f32 / config.width as f32;
-        let sx = self.quad_size * aspect;
-        let sy = self.quad_size;
 
-        self.staged.clear();
-        self.staged.reserve(items.len() * 6);
+        self.staged_instances.clear();
+        self.staged_instances.reserve(items.len());
         for item in items {
-            let center = (self.to_vertex)(item);
-            let [x, y, z] = center.position;
-            let c = center.color;
-            let n = [0.0_f32, 0.0, 1.0];
-            self.staged.push(GpuVertex { position: [x - sx, y - sy, z], normal: n, uv: [0.0, 0.0], color: c });
-            self.staged.push(GpuVertex { position: [x + sx, y - sy, z], normal: n, uv: [1.0, 0.0], color: c });
-            self.staged.push(GpuVertex { position: [x + sx, y + sy, z], normal: n, uv: [1.0, 1.0], color: c });
-            self.staged.push(GpuVertex { position: [x - sx, y - sy, z], normal: n, uv: [0.0, 0.0], color: c });
-            self.staged.push(GpuVertex { position: [x + sx, y + sy, z], normal: n, uv: [1.0, 1.0], color: c });
-            self.staged.push(GpuVertex { position: [x - sx, y + sy, z], normal: n, uv: [0.0, 1.0], color: c });
+            let mut instance = (self.to_instance)(item);
+            
+            // Transform position from simulation space to NDC
+            let [sim_x, sim_y, sim_z] = [instance.position[0] as f64, instance.position[1] as f64, instance.position[2] as f64];
+            let [ndc_x, ndc_y, ndc_z] = self.transform.sim_to_ndc(sim_x, sim_y, sim_z);
+            instance.position = [ndc_x as f32, ndc_y as f32, ndc_z as f32];
+            
+            // Transform radius from simulation units to NDC units separately for X and Y
+            // This ensures particles stay circular regardless of window aspect ratio
+            instance.radius_x = (instance.radius_x as f64 * self.transform.scale[0].abs()) as f32;
+            instance.radius_y = (instance.radius_y as f64 * self.transform.scale[1].abs()) as f32;
+            
+            self.staged_instances.push(instance);
         }
+    }
+
+    fn set_transform(&mut self, transform: Transform) {
+        self.transform = transform;
     }
 }
 

@@ -1,30 +1,32 @@
 use std::sync::{Arc, Mutex};
 
 use base::{
-    prelude::Locale,
-    ui::widgets::property_panel::PropertyPanel,
-    unit::{UnitSettings, UnitSystem},
+    // prelude::Locale,
+    // ui::widgets::property_panel::PropertyPanel,
+    // unit::{UnitSettings, UnitSystem},
+    sim::Bounds,
 };
 use impls::{
-    model::model_example::{ExampleModelConfig, ExampleUnitSettings},
-    simulation::verlet_2d::{sim_simple::new_simple_sim, particle::Particle},
+    // model::model_example::{ExampleModelConfig, ExampleUnitSettings},
+    simulation::verlet_2d::{sim_simple::new_verlet2d_gravity_sim, particle::Particle},
 };
 
 use crate::{
-    engine::{gui::Gui, gui_builder::GuiBuilder, input::InputState, scene::Scene},
+    engine::{gui::Gui, 
+        // gui_builder::GuiBuilder, 
+        input::InputState, scene::Scene},
     graphics_context::{
         GraphicsContext,
         pass::hud::{HudPass, HudState},
-        simulation::{aos::AosSimulationRenderer, pass::SimulationPass},
-        vertex::GpuVertex,
+        simulation::{aos::AosSimulationRenderer, pass::{SimulationPass, ResizeStrategy}, ParticleInstance},
     },
-    test::test_part::TestPart,
+    //est::test_part::TestPart,
 };
 
 pub struct TestScene {
     ui: Option<Gui>,
-    part: Arc<Mutex<TestPart>>,
-    units: UnitSystem<ExampleModelConfig>,
+    // part: Arc<Mutex<TestPart>>,
+    // units: UnitSystem<ExampleModelConfig>,
     hud_state: Arc<Mutex<HudState>>,
 }
 
@@ -32,8 +34,8 @@ impl TestScene {
     pub fn new() -> Self {
         Self {
             ui: None,
-            part: Arc::new(Mutex::new(TestPart::new())),
-            units: UnitSystem::new(ExampleUnitSettings::default()),
+            // part: Arc::new(Mutex::new(TestPart::new())),
+            // units: UnitSystem::new(ExampleUnitSettings::default()),
             hud_state: Arc::new(Mutex::new(HudState::default())),
         }
     }
@@ -51,18 +53,22 @@ impl Scene for TestScene {
         // renderer.add_pass(result.mesh_pass);
         // renderer.add_pass(result.text_pass);
 
-        let sim = new_simple_sim();
+        // Define simulation bounds in simulation space (e.g., 0-10 units)
+        let sim_bounds = Bounds::new_2d(0.0, 400.0, 0.0, 400.0);
+        
+        let sim = new_verlet2d_gravity_sim(120.0, sim_bounds, 0.0, 0.5);
         let particle_renderer = AosSimulationRenderer::new(
-            |p: &Particle| GpuVertex {
+            |p: &Particle| ParticleInstance {
                 position: [p.pos.x as f32, p.pos.y as f32, 0.0],
-                normal:   [0.0, 0.0, 1.0],
-                uv:       [0.0, 0.0],
-                color:    [1.0, 0.5, 0.2, 1.0],
+                radius_x: p.radius as f32,
+                radius_y: p.radius as f32,
+                color: [1.0, 0.5, 0.2, 1.0],
+                _padding: 0.0,
             },
-            0.05,
         );
         renderer.add_pass(
-            SimulationPass::new(sim, particle_renderer, 1.0 / 60.0)
+            SimulationPass::new(sim, particle_renderer, 1.0 / 60.0, sim_bounds)
+                .with_strategy(ResizeStrategy::Dynamic)
                 .with_hud(self.hud_state.clone())
         );
         renderer.add_pass(HudPass::new(self.hud_state.clone()));

@@ -69,6 +69,22 @@ impl<const N: usize> BallConstraint<N> {
     }
 }
 
+/// Clamp a coordinate to `[min, max]`, reflecting implicit velocity on contact.
+/// Reconstructs `pos_old` so the next Verlet step produces the reflected velocity.
+/// `restitution` ∈ `[0.0, 1.0]` — `1.0` = perfectly elastic, `0.0` = fully inelastic.
+#[inline(always)]
+fn apply_axis_constraint(min: f64, max: f64, restitution: f64, pos: &mut f64, pos_old: &mut f64) {
+    if *pos < min {
+        let vel = *pos - *pos_old;          // negative (moving toward min)
+        *pos = min;
+        *pos_old = min - vel * restitution;  // reflected: pos_old < min → next step moves away
+    } else if *pos > max {
+        let vel = *pos - *pos_old;          // positive (moving toward max)
+        *pos = max;
+        *pos_old = max - vel * restitution;  // reflected: pos_old > max → next step moves away
+    }
+}
+
 /// Clamp a particle to `[min, max]` along one dimension, reflecting implicit velocity on contact.
 /// Reconstructs `pos_old` so the next Verlet step produces the reflected velocity.
 /// `restitution` ∈ `[0.0, 1.0]` — `1.0` = perfectly elastic, `0.0` = fully inelastic.
@@ -81,15 +97,29 @@ impl AxisConstraint {
     pub fn new(min: f64, max: f64, restitution: f64) -> Self { Self { min, max, restitution } }
     #[inline(always)]
     pub fn apply(&self, pos: &mut f64, pos_old: &mut f64) {
-        if *pos < self.min {
-            let vel = *pos - *pos_old;          // negative (moving toward min)
-            *pos = self.min;
-            *pos_old = self.min - vel * self.restitution;  // reflected: pos_old < min → next step moves away
-        } else if *pos > self.max {
-            let vel = *pos - *pos_old;          // positive (moving toward max)
-            *pos = self.max;
-            *pos_old = self.max - vel * self.restitution;  // reflected: pos_old > max → next step moves away
-        }
+        apply_axis_constraint(self.min, self.max, self.restitution, pos, pos_old);
+    }
+}
+
+/// Clamp a particle inside a rectangle `[x_min, x_max] × [y_min, y_max]`.
+/// Reconstructs `pos_old` so the next Verlet step produces reflected velocity on each axis.
+/// `restitution` ∈ `[0.0, 1.0]` applies to both axes.
+pub struct RectConstraint {
+    pub x_min: f64,
+    pub x_max: f64,
+    pub y_min: f64,
+    pub y_max: f64,
+    pub restitution: f64,
+}
+impl RectConstraint {
+    pub fn new(x_min: f64, x_max: f64, y_min: f64, y_max: f64, restitution: f64) -> Self {
+        Self { x_min, x_max, y_min, y_max, restitution }
+    }
+
+    #[inline(always)]
+    pub fn apply(&self, x_pos: &mut f64, x_old: &mut f64, y_pos: &mut f64, y_old: &mut f64) {
+        apply_axis_constraint(self.x_min, self.x_max, self.restitution, x_pos, x_old);
+        apply_axis_constraint(self.y_min, self.y_max, self.restitution, y_pos, y_old);
     }
 }
 
@@ -103,6 +133,59 @@ mod tests {
 
     const EPS: f64 = 1e-12;
     const DT:  f64 = 0.1;
+
+    // -----------------------------------------------------------------------
+    // VerletRectConstraint
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn verlet_rect_clamps_both_axes_independently() {
+        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let mut x_pos = 1.5;
+        let mut x_old = 1.4;  // vel = 0.1 toward +x
+        let mut y_pos = -2.3;
+        let mut y_old = -2.1;  // vel = -0.2 toward -y
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        
+        // x clamped to max, reflected
+        assert!((x_pos - 1.0).abs() < EPS);
+        assert!((x_old - 0.9).abs() < EPS);  // 1.0 - 0.1*1.0
+        
+        // y clamped to min, reflected
+        assert!((y_pos - (-2.0)).abs() < EPS);
+        assert!((y_old - (-1.8)).abs() < EPS);  // -2.0 - (-0.2)*1.0
+    }
+
+    #[test]
+    fn verlet_rect_inside_bounds_no_effect() {
+        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let mut x_pos = 0.5;
+        let mut x_old = 0.4;
+        let mut y_pos = 1.0;
+        let mut y_old = 0.9;
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        
+        assert!((x_pos - 0.5).abs() < EPS);
+        assert!((x_old - 0.4).abs() < EPS);
+        assert!((y_pos - 1.0).abs() < EPS);
+        assert!((y_old - 0.9).abs() < EPS);
+    }
+
+    #[test]
+    fn verlet_rect_corner_collision_reflects_both() {
+        let c = RectConstraint::new(0.0, 1.0, 0.0, 1.0, 0.8);
+        let mut x_pos = -0.1;
+        let mut x_old = 0.0;   // vel = -0.1
+        let mut y_pos = 1.2;
+        let mut y_old = 1.1;   // vel = 0.1
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        
+        assert!((x_pos - 0.0).abs() < EPS);
+        assert!((x_old - 0.08).abs() < EPS);  // 0.0 - (-0.1)*0.8
+        
+        assert!((y_pos - 1.0).abs() < EPS);
+        assert!((y_old - 0.92).abs() < EPS);  // 1.0 - 0.1*0.8
+    }
 
     // -----------------------------------------------------------------------
     // VerletLinearDrag

@@ -3,17 +3,17 @@ use base::sim::storage::{AosCpuStorage, CpuStorage, Storage};
 use crate::simulation::verlet_2d::particle::Particle;
 
 
-pub struct VecStorage {
+pub struct AosVecStorage {
     particles: Vec<Particle>,
 }
 
-impl VecStorage {
+impl AosVecStorage {
     pub fn new() -> Self {
         Self { particles: Vec::new() }
     }
 }
 
-impl Storage for VecStorage {
+impl Storage for AosVecStorage {
     fn len(&self) -> usize { 
         self.particles.len() 
     }
@@ -34,13 +34,13 @@ impl Storage for VecStorage {
     }
 }
 
-impl CpuStorage for VecStorage {
+impl CpuStorage for AosVecStorage {
     fn new(capacity: usize) -> Self {
         Self { particles: Vec::with_capacity(capacity) }
     }
 }
 
-impl AosCpuStorage for VecStorage {
+impl AosCpuStorage for AosVecStorage {
     type Item = Particle;
 
     fn push(&mut self, item: Particle) {
