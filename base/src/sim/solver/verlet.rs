@@ -1,3 +1,5 @@
+use crate::math::{Bounds, DVec2};
+
 /// `acc -= coeff * (pos - pos_old) / dt` — viscous drag for one component.
 /// Velocity is approximated from the displacement; no stored velocity needed.
 pub struct LinearDrag {
@@ -74,14 +76,23 @@ impl<const N: usize> BallConstraint<N> {
 /// `restitution` ∈ `[0.0, 1.0]` — `1.0` = perfectly elastic, `0.0` = fully inelastic.
 #[inline(always)]
 fn apply_axis_constraint(min: f64, max: f64, restitution: f64, pos: &mut f64, pos_old: &mut f64) {
+    let vel = *pos - *pos_old;
+
     if *pos < min {
-        let vel = *pos - *pos_old;          // negative (moving toward min)
-        *pos = min;
-        *pos_old = min - vel * restitution;  // reflected: pos_old < min → next step moves away
+        // ONLY bounce if moving left (escaping to the left)
+        if vel < 0.0 {
+            *pos = min;
+            *pos_old = min + vel * restitution; 
+        }
+        // If vel >= 0.0, the particle is entering from the left, do nothing!
+        
     } else if *pos > max {
-        let vel = *pos - *pos_old;          // positive (moving toward max)
-        *pos = max;
-        *pos_old = max - vel * restitution;  // reflected: pos_old > max → next step moves away
+        // ONLY bounce if moving right (escaping to the right)
+        if vel > 0.0 {
+            *pos = max;
+            *pos_old = max + vel * restitution; 
+        }
+        // If vel <= 0.0, the particle is entering from the right, do nothing!
     }
 }
 
@@ -104,22 +115,51 @@ impl AxisConstraint {
 /// Clamp a particle inside a rectangle `[x_min, x_max] × [y_min, y_max]`.
 /// Reconstructs `pos_old` so the next Verlet step produces reflected velocity on each axis.
 /// `restitution` ∈ `[0.0, 1.0]` applies to both axes.
+#[derive(Debug, Clone, Copy)] 
 pub struct RectConstraint {
-    pub x_min: f64,
-    pub x_max: f64,
-    pub y_min: f64,
-    pub y_max: f64,
+    pub min: DVec2,
+    pub max: DVec2,
     pub restitution: f64,
 }
 impl RectConstraint {
-    pub fn new(x_min: f64, x_max: f64, y_min: f64, y_max: f64, restitution: f64) -> Self {
-        Self { x_min, x_max, y_min, y_max, restitution }
+    pub fn new<V>(min: V, max: V, restitution: f64) -> Self
+    where
+        V: Into<DVec2>,
+    {  
+        Self { 
+            min: min.into(),
+            max: max.into(),
+            restitution
+        }
     }
+
+    pub fn from_constraint(other: &RectConstraint, inset: f64, restitution: f64) -> Self {
+        let splat = DVec2::splat(inset);
+        Self {
+            min: other.min + splat,
+            max: other.max - splat,
+            restitution,
+        }
+    }
+
+
+    pub fn from_bounds_with_inset(bounds: &Bounds, inset: f64, restitution: f64) -> Self {
+        let splat = DVec2::splat(inset);
+        let min_2d = bounds.min.truncate() + splat;
+        let max_2d = bounds.max.truncate() - splat;
+ 
+        Self {
+            min: min_2d,
+            max: max_2d,
+            restitution,
+        }
+    }
+
 
     #[inline(always)]
     pub fn apply(&self, x_pos: &mut f64, x_old: &mut f64, y_pos: &mut f64, y_old: &mut f64) {
-        apply_axis_constraint(self.x_min, self.x_max, self.restitution, x_pos, x_old);
-        apply_axis_constraint(self.y_min, self.y_max, self.restitution, y_pos, y_old);
+        apply_axis_constraint(self.min.x, self.max.x, self.restitution, x_pos, x_old);
+        apply_axis_constraint(self.min.y, self.max.y, self.restitution, y_pos, y_old);
     }
 }
 
@@ -140,7 +180,7 @@ mod tests {
 
     #[test]
     fn verlet_rect_clamps_both_axes_independently() {
-        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let c = RectConstraint::new((-1.0, 1.0), (-2.0, 2.0), 1.0);
         let mut x_pos = 1.5;
         let mut x_old = 1.4;  // vel = 0.1 toward +x
         let mut y_pos = -2.3;
@@ -158,7 +198,7 @@ mod tests {
 
     #[test]
     fn verlet_rect_inside_bounds_no_effect() {
-        let c = RectConstraint::new(-1.0, 1.0, -2.0, 2.0, 1.0);
+        let c = RectConstraint::new((-1.0, 1.0), (-2.0, 2.0), 1.0);
         let mut x_pos = 0.5;
         let mut x_old = 0.4;
         let mut y_pos = 1.0;
@@ -173,7 +213,7 @@ mod tests {
 
     #[test]
     fn verlet_rect_corner_collision_reflects_both() {
-        let c = RectConstraint::new(0.0, 1.0, 0.0, 1.0, 0.8);
+        let c = RectConstraint::new((0.0, 1.0), (0.0, 1.0), 0.8);
         let mut x_pos = -0.1;
         let mut x_old = 0.0;   // vel = -0.1
         let mut y_pos = 1.2;

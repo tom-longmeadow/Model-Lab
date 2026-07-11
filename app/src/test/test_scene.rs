@@ -4,7 +4,7 @@ use base::{
     // prelude::Locale,
     // ui::widgets::property_panel::PropertyPanel,
     // unit::{UnitSettings, UnitSystem},
-    sim::Bounds,
+    math::{Bounds, DVec2},   ui::layout::color::Color
 };
 use impls::{
     // model::model_example::{ExampleModelConfig, ExampleUnitSettings},
@@ -54,9 +54,11 @@ impl Scene for TestScene {
         // renderer.add_pass(result.text_pass);
 
         // Define simulation bounds in simulation space (e.g., 0-10 units)
-        let sim_bounds = Bounds::new_2d(0.0, 400.0, 0.0, 400.0);
+        let sim_bounds = Bounds::new_2d((0.0, 400.0), (0.0, 400.0));
         
-        let sim = new_verlet2d_gravity_sim(120.0, sim_bounds, 0.0, 0.5);
+        let sim = new_verlet2d_gravity_sim(
+            120.0, sim_bounds, 20.0, 1000.0, 0.5,
+        10, 20, 12, DVec2 { x: 10.0, y: -10.0 }, 10.0, Color::WHITE);
         let particle_renderer = AosSimulationRenderer::new(
             |p: &Particle| ParticleInstance {
                 position: [p.pos.x as f32, p.pos.y as f32, 0.0],

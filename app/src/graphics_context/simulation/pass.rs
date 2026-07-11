@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use base::sim::{simulation::Simulate, Bounds};
+use base::{math::Bounds, sim::simulation::Simulate};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer, Transform}};
 
 /// Strategy for handling window resize events in relation to simulation bounds.
@@ -71,8 +71,8 @@ where
                 // Simulation units are pixels. Map sim bounds to full NDC range.
                 // Since bounds match window dimensions, this gives 1 sim unit = 1 pixel.
                 Transform::from_bounds(
-                    self.sim_bounds.x_min, self.sim_bounds.x_max,
-                    self.sim_bounds.y_min, self.sim_bounds.y_max,
+                    self.sim_bounds.min.x, self.sim_bounds.max.x,
+                    self.sim_bounds.min.y, self.sim_bounds.max.y,
                     -1.0, 1.0,
                     -1.0, 1.0,
                 )
@@ -89,14 +89,8 @@ where
     fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
         // For Dynamic strategy, bounds = window dimensions in pixels
         // Bottom-left stays at (0,0), top-right expands to (width, height)
-        let new_bounds = Bounds {
-            x_min: 0.0,
-            x_max: config.width as f64,
-            y_min: 0.0,
-            y_max: config.height as f64,
-            z_min: self.sim_bounds.z_min,
-            z_max: self.sim_bounds.z_max,
-        };
+        let new_bounds = Bounds::new_2d((0.0, 0.0),(config.width as f64, config.height as f64));
+            
         
         self.simulation.set_bounds(new_bounds);
         self.sim_bounds = new_bounds;

@@ -1,5 +1,5 @@
 use std::time::Instant;
-use crate::sim::{clock::Clock, lifecycle::Lifecycle, metrics::SimMetrics, solver::Solver, storage::Storage, Bounds};
+use crate::{math::Bounds, sim::{clock::Clock, lifecycle::Lifecycle, metrics::SimMetrics, solver::Solver, storage::Storage}};
 
 pub trait Simulate {
     type Storage: Storage;
@@ -252,7 +252,7 @@ mod tests {
             MockStorage::new(10),
             MockSolver::new(),
             MockLifecycle,
-            Bounds::new_2d(0.0, 10.0, 0.0, 10.0),
+            Bounds::new_2d((0.0,1000.0), (0.0,1000.0))
         )
     }
 

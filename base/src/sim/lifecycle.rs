@@ -1,7 +1,7 @@
 pub mod creator;
 pub mod deletor;
 
-use crate::sim::{storage::Storage, Bounds};
+use crate::{math::Bounds, sim::storage::Storage};
 
 /// Controls how and when new state enters and leaves the simulation.
 /// Implement this directly — compose [`Creator`] and [`Deletor`] as fields.

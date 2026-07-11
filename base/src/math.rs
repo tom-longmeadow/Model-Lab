@@ -57,33 +57,87 @@ impl Vector for Vec4 { const DIM: usize = 4; }
 impl Vector for DVec2 { const DIM: usize = 2; }
 impl Vector for DVec3 { const DIM: usize = 3; }
 impl Vector for DVec4 { const DIM: usize = 4; }
-
-// Utility functions (optional - add domain-specific helpers here)
-/// Linear interpolation between two vectors
-#[inline]
-pub fn lerp(a: Vec3, b: Vec3, t: f32) -> Vec3 {
-    a.lerp(b, t)
-}
-
-/// Clamp a vector's length to a maximum value
-#[inline]
-pub fn clamp_length(v: Vec3, max_length: f32) -> Vec3 {
-    if v.length_squared() > max_length * max_length {
-        v.normalize() * max_length
-    } else {
-        v
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
  
-    #[test]
-    fn test_clamp_length() {
-        let v = Vec3::new(3.0, 4.0, 0.0); // length = 5
-        let clamped = clamp_length(v, 3.0);
-        assert!((clamped.length() - 3.0).abs() < 0.001);
+ // Re-export the FloatExt trait as a public utility.
+// This allows other files to just bring your module into scope
+// to get .lerp() on basic f64/f32 primitives.
+pub use glam::FloatExt; 
+ 
+
+
+/// Spatial bounds defining a rectangular region in 3D space. 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Bounds {
+    pub min: DVec3,
+    pub max: DVec3,
+}
+
+impl Bounds {
+    pub fn new(min: DVec3, max: DVec3) -> Self {
+        Self { min, max }
     }
+
+    /// Creates a 2D bounding box resting flat on the Z = 0 plane.
+    pub fn new_2d<V>(min_2d: V, max_2d: V) -> Self
+    where
+        V: Into<DVec2>,
+    {
+        let m1 = min_2d.into();
+        let m2 = max_2d.into();
+
+        Self {
+            // Extends the 2D vectors into 3D vectors by appending Z = 0.0
+            min: DVec3::new(m1.x, m1.y, 0.0),
+            max: DVec3::new(m2.x, m2.y, 0.0),
+        }
+    }
+
+    /// Finds the exact center point of your 3D bounds
+    pub fn center(&self) -> DVec3 {
+        // Leverages built-in midpoint math on the vectors directly!
+        self.min.midpoint(self.max)
+    }
+
+    /// Gets the size (width, height, depth) as a vector
+    pub fn size(&self) -> DVec3 {
+        self.max - self.min
+    }
+
+    /// Checks if a particle is inside your 3D bounds
+    pub fn contains(&self, point: DVec3) -> bool {
+        // glam gives you component-wise comparisons natively
+        point.cmple(self.max).all() && point.cmpge(self.min).all()
+    }
+
+    /// Automatically expands the bounding box to encapsulate a new particle position
+    pub fn encapsulate(&mut self, point: DVec3) {
+        self.min = self.min.min(point);
+        self.max = self.max.max(point);
+    }
+
+    /// Returns a new `Bounds` shrunk uniformly by a scalar border on all sides.
+    #[must_use] // Warns the developer if they forget to assign the returned value
+    pub fn shrink(&self, border: f64) -> Self {
+        // Move min coordinates UP, move max coordinates DOWN
+        let offset = DVec3::splat(border);
+        Self {
+            min: self.min + offset,
+            max: self.max - offset,
+        }
+    }
+
+    /// Returns a new `Bounds` shrunk by distinct x, y, and z border amounts.
+    #[must_use]
+    pub fn shrink_axes<V>(&self, border: V) -> Self 
+    where 
+        V: Into<DVec3> 
+    {
+        // Using Into allows passing a tuple (x, y, z) or a DVec3 seamlessly
+        let offset = border.into();
+        Self {
+            min: self.min + offset,
+            max: self.max - offset,
+        }
+    }
+
 }
