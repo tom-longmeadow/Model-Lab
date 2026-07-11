@@ -5,6 +5,8 @@
 
 // Re-export the entire glam crate for advanced usage
 use glam;
+pub use glam::FloatExt; 
+pub const EPSILON: f32 = 1e-5;
 
 // Core vector types - these are the "public API" of your math module
 pub type Vec2 = glam::Vec2;
@@ -40,31 +42,98 @@ pub type DQuat = glam::DQuat;
 pub type Affine2 = glam::Affine2;
 pub type Affine3A = glam::Affine3A;
 
-// ---------------------------------------------------------------------------
-// Helper Traits
-// ---------------------------------------------------------------------------
 
-/// A trait for vector types that provides compile-time dimension info.
-pub trait Vector {
-    /// The number of components in the vector (e.g., 2 for Vec2, 3 for Vec3).
-    const DIM: usize;
+/// Minimal float operations needed for generic simulation math.
+pub trait FloatScalar:
+    Copy
+    + PartialOrd
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + std::ops::Neg<Output = Self>
+{
+    const ZERO: Self;
+    const ONE: Self;
+    fn sqrt(self) -> Self;
+    fn from_f64(v: f64) -> Self;
 }
 
-impl Vector for Vec2 { const DIM: usize = 2; }
-impl Vector for Vec3 { const DIM: usize = 3; }
-impl Vector for Vec4 { const DIM: usize = 4; }
+impl FloatScalar for f32 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    #[inline] fn sqrt(self) -> Self { f32::sqrt(self) }
+    #[inline] fn from_f64(v: f64) -> Self { v as f32 }
+}
 
-impl Vector for DVec2 { const DIM: usize = 2; }
-impl Vector for DVec3 { const DIM: usize = 3; }
-impl Vector for DVec4 { const DIM: usize = 4; }
+impl FloatScalar for f64 {
+    const ZERO: Self = 0.0;
+    const ONE: Self = 1.0;
+    #[inline] fn sqrt(self) -> Self { f64::sqrt(self) }
+    #[inline] fn from_f64(v: f64) -> Self { v }
+}
+
+pub trait Vector: Copy {
+    const DIM: usize;
+    type Scalar;
+    fn dot(self, other: Self) -> Self::Scalar;
+}
+
+impl Vector for glam::Vec2 {
+    const DIM: usize = 2;
+    type Scalar = f32;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
+
+impl Vector for glam::Vec3 {
+    const DIM: usize = 3;
+    type Scalar = f32;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
+
+impl Vector for glam::Vec4 {
+    const DIM: usize = 4;
+    type Scalar = f32;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
+
+impl Vector for glam::DVec2 {
+    const DIM: usize = 2;
+    type Scalar = f64;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
+
+impl Vector for glam::DVec3 {
+    const DIM: usize = 3;
+    type Scalar = f64;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
+
+impl Vector for glam::DVec4 {
+    const DIM: usize = 4;
+    type Scalar = f64;
+    #[inline]
+    fn dot(self, other: Self) -> Self::Scalar {
+        self.dot(other)
+    }
+}
  
- // Re-export the FloatExt trait as a public utility.
-// This allows other files to just bring your module into scope
-// to get .lerp() on basic f64/f32 primitives.
-pub use glam::FloatExt; 
  
-
-
 /// Spatial bounds defining a rectangular region in 3D space. 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Bounds {

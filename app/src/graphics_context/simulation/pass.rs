@@ -102,8 +102,8 @@ where
         self.renderer.set_transform(self.transform);
     }
 
-    fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
-        self.simulation.simulate(self.dt);
+    fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
+        self.simulation.simulate(frame_time);
 
         if let Some(hud) = &self.hud {
             if let Ok(mut s) = hud.try_lock() {

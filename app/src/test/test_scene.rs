@@ -57,8 +57,8 @@ impl Scene for TestScene {
         let sim_bounds = Bounds::new_2d((0.0, 400.0), (0.0, 400.0));
         
         let sim = new_verlet2d_gravity_sim(
-            120.0, sim_bounds, 20.0, 1000.0, 0.5,
-        10, 20, 12, DVec2 { x: 10.0, y: -10.0 }, 10.0, Color::WHITE);
+            120.0, 4, sim_bounds, 20.0, 1000.0, 0.3,
+        10, 20, 4, DVec2 { x: 5.0, y: 0.0 }, 10.0, Color::WHITE);
         let particle_renderer = AosSimulationRenderer::new(
             |p: &Particle| ParticleInstance {
                 position: [p.pos.x as f32, p.pos.y as f32, 0.0],
@@ -76,7 +76,7 @@ impl Scene for TestScene {
         renderer.add_pass(HudPass::new(self.hud_state.clone()));
     }
 
-    fn update(&mut self, _input: &InputState) {
+    fn update(&mut self, frame_time: f64, _input: &InputState) {
         if let Ok(mut hud) = self.hud_state.try_lock() {
             hud.set("Particles", "1");
         }
@@ -89,5 +89,5 @@ impl Scene for TestScene {
         }
     }
 
-    fn update_passes(&mut self, _renderer: &mut GraphicsContext) {}
+    fn update_passes(&mut self, frame_time: f64, _renderer: &mut GraphicsContext) {}
 }

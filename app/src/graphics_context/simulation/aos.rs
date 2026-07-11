@@ -176,7 +176,7 @@ impl<I: 'static> Renderer for AosSimulationRenderer<I> {
     fn update_data(&mut self, _data: Self::Data) {}
 
     fn update(
-        &mut self,
+        &mut self, 
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _config: &wgpu::SurfaceConfiguration,

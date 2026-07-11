@@ -141,6 +141,7 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "glam",
+ "rustc-hash 2.1.2",
 ]
 
 [[package]]

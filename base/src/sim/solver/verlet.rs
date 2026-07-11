@@ -1,4 +1,5 @@
-use crate::math::{Bounds, DVec2};
+use crate::math::{Bounds, DVec2, Vector, FloatScalar};
+use std::ops::{Add, Sub, Mul, AddAssign, SubAssign};
 
 /// `acc -= coeff * (pos - pos_old) / dt` — viscous drag for one component.
 /// Velocity is approximated from the displacement; no stored velocity needed.
@@ -115,7 +116,57 @@ impl AxisConstraint {
 /// Clamp a particle inside a rectangle `[x_min, x_max] × [y_min, y_max]`.
 /// Reconstructs `pos_old` so the next Verlet step produces reflected velocity on each axis.
 /// `restitution` ∈ `[0.0, 1.0]` applies to both axes.
-#[derive(Debug, Clone, Copy)] 
+
+/// Resolve a collision between two particles using Verlet integration.
+/// Modifies positions and reconstructs pos_old to reflect collision response.
+/// 
+/// # Parameters
+/// - `pos_a`, `pos_old_a`: Position and previous position of particle A
+/// - `inv_mass_a`: Inverse mass of particle A (0.0 for static objects)
+/// - `pos_b`, `pos_old_b`: Position and previous position of particle B
+/// - `inv_mass_b`: Inverse mass of particle B
+/// - `normal`: Collision normal (from A to B)
+/// - `penetration`: Penetration depth
+/// - `restitution`: Coefficient of restitution (0.0 = inelastic, 1.0 = elastic)
+#[inline]
+pub fn resolve_collision<V>(
+    pos_a: &mut V, pos_old_a: &mut V, inv_mass_a: V::Scalar,
+    pos_b: &mut V, pos_old_b: &mut V, inv_mass_b: V::Scalar,
+    normal: V, penetration: V::Scalar, restitution: V::Scalar,
+) 
+where
+    V: Vector + Copy + Add<Output = V> + Sub<Output = V> + Mul<V::Scalar, Output = V> + AddAssign + SubAssign,
+    V::Scalar: FloatScalar,
+{
+    let total_inv_mass = inv_mass_a + inv_mass_b;
+    if total_inv_mass <= V::Scalar::ZERO { return; }
+
+   // Capture velocities BEFORE position correction.
+    let vel_a = *pos_a - *pos_old_a;
+    let vel_b = *pos_b - *pos_old_b;
+
+    // Position correction — move BOTH pos and pos_old by the same amount
+    // so the implicit Verlet velocity is unchanged by the separation step.
+    let correction_scalar = penetration / total_inv_mass;
+    let correction_a = normal * (correction_scalar * inv_mass_a);
+    let correction_b = normal * (correction_scalar * inv_mass_b);
+    *pos_a -= correction_a;
+    *pos_old_a -= correction_a;   // ← preserve velocity
+    *pos_b += correction_b;
+    *pos_old_b += correction_b;   // ← preserve velocity
+
+    // Impulse — uses pre-correction velocities, only changes pos_old
+    let relative_velocity = vel_a - vel_b;
+    let vel_along_normal = relative_velocity.dot(normal);
+
+    if vel_along_normal > V::Scalar::ZERO {
+        let impulse_magnitude = -(V::Scalar::ONE + restitution) * vel_along_normal / total_inv_mass;
+        let impulse = normal * impulse_magnitude;
+        *pos_old_a -= impulse * inv_mass_a;
+        *pos_old_b += impulse * inv_mass_b;
+    }
+}
+
 pub struct RectConstraint {
     pub min: DVec2,
     pub max: DVec2,
@@ -157,9 +208,10 @@ impl RectConstraint {
 
 
     #[inline(always)]
-    pub fn apply(&self, x_pos: &mut f64, x_old: &mut f64, y_pos: &mut f64, y_old: &mut f64) {
-        apply_axis_constraint(self.min.x, self.max.x, self.restitution, x_pos, x_old);
-        apply_axis_constraint(self.min.y, self.max.y, self.restitution, y_pos, y_old);
+    pub fn apply(&self, x_pos: &mut f64, x_old: &mut f64, y_pos: &mut f64, y_old: &mut f64, use_restitution: bool ) {
+        let restitution = if use_restitution { self.restitution } else { 0.0 };
+        apply_axis_constraint(self.min.x, self.max.x, restitution, x_pos, x_old);
+        apply_axis_constraint(self.min.y, self.max.y, restitution, y_pos, y_old);
     }
 }
 
@@ -185,7 +237,7 @@ mod tests {
         let mut x_old = 1.4;  // vel = 0.1 toward +x
         let mut y_pos = -2.3;
         let mut y_old = -2.1;  // vel = -0.2 toward -y
-        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old, true);
         
         // x clamped to max, reflected
         assert!((x_pos - 1.0).abs() < EPS);
@@ -203,7 +255,7 @@ mod tests {
         let mut x_old = 0.4;
         let mut y_pos = 1.0;
         let mut y_old = 0.9;
-        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old, true);
         
         assert!((x_pos - 0.5).abs() < EPS);
         assert!((x_old - 0.4).abs() < EPS);
@@ -218,7 +270,7 @@ mod tests {
         let mut x_old = 0.0;   // vel = -0.1
         let mut y_pos = 1.2;
         let mut y_old = 1.1;   // vel = 0.1
-        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old);
+        c.apply(&mut x_pos, &mut x_old, &mut y_pos, &mut y_old, true);
         
         assert!((x_pos - 0.0).abs() < EPS);
         assert!((x_old - 0.08).abs() < EPS);  // 0.0 - (-0.1)*0.8

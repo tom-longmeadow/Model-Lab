@@ -126,17 +126,14 @@ impl Pass for HudPass {
 
     fn update(
         &mut self,
+        frame_time: f64, 
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
-    ) {
-        let now = Instant::now();
-        let dt  = now.duration_since(self.last_frame).as_secs_f64();
-        self.last_frame = now;
-
+    ) { 
         if let Ok(mut s) = self.state.try_lock() {
-            s.set("FPS",   format!("{:.0}",    if dt > 0.0 { 1.0 / dt } else { 0.0 }));
-            s.set("Frame", format!("{:.2} ms", dt * 1000.0));
+            s.set("FPS",   format!("{:.0}",    if frame_time > 0.0 { 1.0 / frame_time } else { 0.0 }));
+            s.set("Frame", format!("{:.2} ms", frame_time * 1000.0));
         }
 
         let params = self.state.lock()

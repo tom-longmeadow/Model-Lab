@@ -119,7 +119,13 @@ impl GraphicsContext {
         self.surface_cfg.height
     }
     
-    pub fn render(&mut self) -> Result<(), RendererError> {
+    pub fn render(&mut self, frame_time: f64,) -> Result<(), RendererError> {
+
+
+        for pass in &mut self.passes {
+            pass.update(frame_time, &self.device, &self.queue,&self.surface_cfg);
+        } 
+
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t) => t,
             wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
@@ -133,11 +139,7 @@ impl GraphicsContext {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
-        for pass in &mut self.passes {
-            pass.update(&self.device, &self.queue,&self.surface_cfg);
-        }
-
+ 
         let mut encoder =
             self.device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {

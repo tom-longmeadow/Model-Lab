@@ -9,4 +9,5 @@ testing = []
 [dependencies]
 glam = { workspace = true }
 bytemuck = { workspace = true }
+rustc-hash = { workspace = true }
 

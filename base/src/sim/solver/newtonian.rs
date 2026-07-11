@@ -1,4 +1,5 @@
 
+ 
 
 /// `acc -= coeff * vel` — viscous drag for one component.
 /// Requires explicit stored velocity (Newtonian / Leapfrog / VelocityVerlet).
@@ -234,7 +235,7 @@ mod tests {
     // NewtonianDimConstraint
     // -----------------------------------------------------------------------
 
-    #[test]
+    //#[test]
     // fn dim_constraint_below_min_clamps_and_reflects() {
     //     let c = AxisConstraint::new(0.0, 10.0, 1.0);
     //     let mut pos = -1.0;

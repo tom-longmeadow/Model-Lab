@@ -199,7 +199,7 @@ mod tests {
         pub calls: String,
         pub received_ticks: Vec<u64>,
         pub received_dts: Vec<f64>,
-        pub iteration_count: usize,
+        pub iteration_count: u64,
     }
 
     impl MockSolver {
@@ -217,7 +217,7 @@ mod tests {
     where
         S: Storage + AosCpuStorage<Item = MockEntity>,
     {
-        fn substep_count(&self) -> usize {
+        fn substep_count(&self) -> u64 {
             self.iteration_count
         }
 
@@ -335,7 +335,7 @@ mod tests {
         let dt_sub = dt_step / count as f64;
 
         sim.simulate(dt_step * 4.0);
-        assert_eq!(sim.solver.received_dts, vec![dt_sub; count * 4]);
+        assert_eq!(sim.solver.received_dts, vec![dt_sub; (count * 4) as usize]);
     }
 
     #[test]

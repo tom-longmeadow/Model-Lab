@@ -11,7 +11,7 @@ pub trait Pass {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     );
-     fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration);
+     fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration);
     fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>);
 }
 
@@ -33,7 +33,7 @@ impl<R: Renderer + 'static> Pass for RenderPass<R> {
         self.renderer.prepare(device, queue, config);
     }
 
-    fn update(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
+    fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
         self.renderer.update(device, queue, config);
     }
     
