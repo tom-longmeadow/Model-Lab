@@ -102,9 +102,7 @@ where
 
     fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
         self.simulation.simulate(frame_time);
-
-        
-
+ 
         if let Some(hud) = &self.hud {
             if let Ok(mut s) = hud.try_lock() {
                 let m = self.simulation.metrics();

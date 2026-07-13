@@ -4,7 +4,7 @@ use base::{
     // prelude::Locale,
     // ui::widgets::property_panel::PropertyPanel,
     // unit::{UnitSettings, UnitSystem},
-    math::{Bounds, DVec2},   ui::layout::color::Color
+    math::{Bounds, DVec2}, sim::solver::constraint::Insets, ui::layout::color::Color
 };
 use impls::{
     // model::model_example::{ExampleModelConfig, ExampleUnitSettings},
@@ -65,19 +65,18 @@ impl Scene for TestScene {
         Color { r: 139, g: 0,   b: 255, a: 255 }, // Vibrant Purple / Violet
     ];
 
+ 
+    
+
+
         let sim = new_verlet2d_gravity_sim(
-            60.0, 4, sim_bounds, 40.0, 1100.0, 0.5,
-        10, 3, 800, DVec2 { x: 5.0, y: 2.0 }, 10.0, rainbow);
+            60.0, 4, 2, 
+            sim_bounds,  Insets::symmetrical(10.0, 30.0), 
+            1400.0, 20, 3,
+            500, DVec2 { x: 6.0, y: -3.0 }, 10.0, 
+            rainbow);
 
-        let particle_renderer = AosSimulationRenderer::<Particle>::new();
-
-        // let particle_renderer = AosSimulationRenderer::new(
-        //     |p: &Particle| ParticleInstance {
-        //         position: [p.pos.x as f32, p.pos.y as f32, 0.0],
-        //         radius_x: p.radius as f32, 
-        //         color: p.color.as_f32_array(), 
-        //     },
-        // );
+        let particle_renderer = AosSimulationRenderer::<Particle>::new(); 
         renderer.add_pass(
             SimulationPass::new(sim, particle_renderer, sim_bounds)
                 .with_hud(self.hud_state.clone())

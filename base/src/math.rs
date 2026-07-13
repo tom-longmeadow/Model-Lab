@@ -73,11 +73,14 @@ impl FloatScalar for f64 {
     #[inline] fn from_f64(v: f64) -> Self { v }
 }
 
-pub trait Vector: Copy {
+ 
+
+pub trait Vector: Copy + std::ops::Neg<Output = Self> {
     const DIM: usize;
     type Scalar;
     fn dot(self, other: Self) -> Self::Scalar;
 }
+
 
 impl Vector for glam::Vec2 {
     const DIM: usize = 2;

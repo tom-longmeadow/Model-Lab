@@ -75,14 +75,6 @@ impl<K: Hash + Eq, V> UniformGrid<K, V> {
         self.cell_size = cell_size * 1.1;
     }
 
-
-    // pub fn resize(&mut self, _bounds: &Bounds, radii: &[f64]) {
-    //     self.clear();
-    //     if radii.is_empty() { return; }
-        
-    //     self.cell_size = max_radius * 2.0 * 1.1;
-    // }
-
     pub fn clear(&mut self) {
         self.cells.clear();
     }
@@ -179,7 +171,7 @@ impl QuantizeInto<IVec3> for DVec3 {
     }
 }
 
-// Now populate is generic — remove the two concrete impls
+ 
 impl<K: GridKey, V> UniformGrid<K, V>
 where
     V: Copy + QuantizeInto<K>,

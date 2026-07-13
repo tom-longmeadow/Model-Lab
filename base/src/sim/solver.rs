@@ -1,10 +1,9 @@
-pub mod acceleration;
-pub mod integrator; 
-pub mod newtonian;
 pub mod partition;
 pub mod verlet;
+pub mod tuning;
+pub mod constraint;
+pub mod solver_2d;
 
- 
 
 use crate::{math::Bounds, sim::storage::Storage};
 
