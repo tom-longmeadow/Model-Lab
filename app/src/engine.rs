@@ -100,7 +100,7 @@ impl Engine {
 
         // Begin frame, update scene logic
         self.input.begin_frame();
-        self.scenes.update(frame_time, &self.input);   
+        self.scenes.update(frame_time, &self.input, &mut self.graphics);   
 
         // Renderer performs the render  
         match self.graphics.render(frame_time) {

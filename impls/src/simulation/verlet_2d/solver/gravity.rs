@@ -21,7 +21,7 @@ impl GravitySolver
     pub fn new(substep_count: u64, bounds: &Bounds, restitution: f64, gravity: f64, inset: f64) -> Self {
         Self { 
             substep_count,
-            collision_iterations: 5,  // Multiple passes to fully separate overlapping particles
+            collision_iterations: 4,  // Multiple passes to fully separate overlapping particles
             bounds: RectConstraint::from_bounds_with_inset(bounds, inset, restitution),
             gravity,
             inset,
@@ -44,6 +44,18 @@ impl Solver<AosVecStorage> for GravitySolver {
 
         
        
+    }
+
+    fn post_step(&mut self, storage: &mut AosVecStorage, _dt: f64) {
+        // Dampen very slow particles to prevent jitter
+        const VELOCITY_SLEEP_THRESHOLD: f64 = 1e-4;  // Stop particles moving slower than this
+        for p in storage.iter_mut() {
+            let vel = p.pos - p.pos_old;
+            let speed_sq = vel.dot(vel);
+            if speed_sq < VELOCITY_SLEEP_THRESHOLD * VELOCITY_SLEEP_THRESHOLD {
+                p.pos_old = p.pos;  // Set velocity to zero
+            }
+        }
     }
     
     fn pre_step(&mut self, storage: &mut AosVecStorage, _dt: f64, _tick: u64, bounds: &Bounds) {
@@ -198,15 +210,7 @@ impl Solver<AosVecStorage> for GravitySolver {
             self.bounds.apply(&mut p.pos.x, &mut p.pos_old.x, &mut p.pos.y, &mut p.pos_old.y, true);
         }
         
-        // Dampen very slow particles to prevent jitter
-        const VELOCITY_SLEEP_THRESHOLD: f64 = 1e-4;  // Stop particles moving slower than this
-        for p in storage.iter_mut() {
-            let vel = p.pos - p.pos_old;
-            let speed_sq = vel.dot(vel);
-            if speed_sq < VELOCITY_SLEEP_THRESHOLD * VELOCITY_SLEEP_THRESHOLD {
-                p.pos_old = p.pos;  // Set velocity to zero
-            }
-        }
+        
     }
 
      

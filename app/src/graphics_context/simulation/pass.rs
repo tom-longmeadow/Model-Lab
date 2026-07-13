@@ -1,15 +1,15 @@
 use std::sync::{Arc, Mutex};
-use base::{math::Bounds, sim::simulation::Simulate};
+use base::{math::Bounds, sim::{metrics::SimMetrics, simulation::Simulate}};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer, Transform}};
 
 /// Strategy for handling window resize events in relation to simulation bounds.
-#[derive(Debug, Clone, Copy)]
-pub enum ResizeStrategy {
-    /// Simulation units are pixels. Window size determines world size.
-    /// Particle radius in pixels stays constant visual size regardless of window size.
-    /// Like a marble in a box - resize window = resize box, marble stays same size.
-    Dynamic,
-}
+//#[derive(Debug, Clone, Copy)]
+// pub enum ResizeStrategy {
+//     /// Simulation units are pixels. Window size determines world size.
+//     /// Particle radius in pixels stays constant visual size regardless of window size.
+//     /// Like a marble in a box - resize window = resize box, marble stays same size.
+//     Dynamic,
+// }
 
 /// A render pass that owns a simulation and a renderer, driving both each frame.
 ///
@@ -27,12 +27,11 @@ where
     R: SimulationRenderer<S::Storage>,
 {
     simulation: S,
-    renderer: R,
-    dt: f64,
+    renderer: R, 
     hud: Option<Arc<Mutex<HudState>>>,
-    strategy: ResizeStrategy,
-    transform: Transform,
-    sim_bounds: Bounds,
+    //strategy: ResizeStrategy,
+    //transform: Transform,
+    sim_bounds: Bounds, 
 }
 
 impl<S, R> SimulationPass<S, R>
@@ -40,15 +39,14 @@ where
     S: Simulate,
     R: SimulationRenderer<S::Storage>,
 {
-    pub fn new(simulation: S, renderer: R, dt: f64, sim_bounds: Bounds) -> Self {
+    pub fn new(simulation: S, renderer: R, sim_bounds: Bounds) -> Self {
         Self { 
             simulation, 
-            renderer, 
-            dt, 
+            renderer,  
             hud: None,
-            strategy: ResizeStrategy::Dynamic,
-            transform: Transform::identity(),
-            sim_bounds,
+            //strategy: ResizeStrategy::Dynamic,
+            //transform: Transform::identity(),
+            sim_bounds, 
         }
     }
 
@@ -58,27 +56,27 @@ where
         self
     }
 
-    /// Set the resize strategy for this simulation pass.
-    pub fn with_strategy(mut self, strategy: ResizeStrategy) -> Self {
-        self.strategy = strategy;
-        self
-    }
+    // /// Set the resize strategy for this simulation pass.
+    // pub fn with_strategy(mut self, strategy: ResizeStrategy) -> Self {
+    //     self.strategy = strategy;
+    //     self
+    // }
 
-    /// Calculate transform based on current strategy and surface config.
-    fn calculate_transform(&self, _config: &wgpu::SurfaceConfiguration) -> Transform {
-        match self.strategy {
-            ResizeStrategy::Dynamic => {
-                // Simulation units are pixels. Map sim bounds to full NDC range.
-                // Since bounds match window dimensions, this gives 1 sim unit = 1 pixel.
-                Transform::from_bounds(
-                    self.sim_bounds.min.x, self.sim_bounds.max.x,
-                    self.sim_bounds.min.y, self.sim_bounds.max.y,
-                    -1.0, 1.0,
-                    -1.0, 1.0,
-                )
-            }
-        }
-    }
+    // /// Calculate transform based on current strategy and surface config.
+    // fn calculate_transform(&self, _config: &wgpu::SurfaceConfiguration) -> Transform {
+    //     match self.strategy {
+    //         ResizeStrategy::Dynamic => {
+    //             // Simulation units are pixels. Map sim bounds to full NDC range.
+    //             // Since bounds match window dimensions, this gives 1 sim unit = 1 pixel.
+    //             Transform::from_bounds(
+    //                 self.sim_bounds.min.x, self.sim_bounds.max.x,
+    //                 self.sim_bounds.min.y, self.sim_bounds.max.y,
+    //                 -1.0, 1.0,
+    //                 -1.0, 1.0,
+    //             )
+    //         }
+    //     }
+    // }
 }
 
 impl<S, R> Pass for SimulationPass<S, R>
@@ -97,21 +95,28 @@ where
         
         self.renderer.prepare(device, queue, config);
         
-        // Calculate transform after potentially updating sim_bounds
-        self.transform = Self::calculate_transform(self, config);
-        self.renderer.set_transform(self.transform);
+        // // Calculate transform after potentially updating sim_bounds
+        // self.transform = Self::calculate_transform(self, config);
+        // self.renderer.set_transform(self.transform);
     }
 
     fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
         self.simulation.simulate(frame_time);
 
+        
+
         if let Some(hud) = &self.hud {
             if let Ok(mut s) = hud.try_lock() {
                 let m = self.simulation.metrics();
-                s.set("Sim hz",    format!("{:.0}",      m.hz));
-                s.set("Steps/f",   format!("{}",          m.steps_per_frame));
-                s.set("Step",      format!("{:.3} ms",    m.step_time_ms));
-                s.set("Substep",   format!("{:.3} ms",    m.substep_time_ms));
+                
+                s.set("FPS",format!("{:.0}", if frame_time > 0.0 { 1.0 / frame_time } else { 0.0 }));
+                s.set("",    "");
+                s.set("Particles", format!("{:.0}", m.storage_size));
+                s.set("hz", format!("{:.0}",       m.hz));
+                s.set("Max step",        format!("{:.3} ms",    1.0 / m.hz * 1000.0));
+                s.set("Step time",       format!("{:.3} ms",    m.step_time_ms));
+                // s.set("Steps/f",   format!("{}",          m.steps_per_frame)); 
+                // s.set("Substep",   format!("{:.3} ms",    m.substep_time_ms));
                 s.set("Accum",     format!("{:.2} ms",    m.accumulator_ms));
                 s.set("Ticks",     format!("{}",          m.total_ticks));
             }

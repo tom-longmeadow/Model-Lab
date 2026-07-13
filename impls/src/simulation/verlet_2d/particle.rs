@@ -1,6 +1,6 @@
 use base::{math::DVec2, ui::layout::color::Color};
 
-
+#[repr(C)]
 #[derive(Debug, Clone, Copy)] 
 pub struct Particle {
     pub pos:     DVec2,

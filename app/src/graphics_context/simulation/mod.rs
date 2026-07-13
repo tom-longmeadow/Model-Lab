@@ -3,7 +3,7 @@ pub mod pass;
 pub mod renderer;
 
 // Re-export ParticleInstance for use by applications
-pub use aos::ParticleInstance;
+//pub use aos::ParticleInstance;
 
 /// Transform from simulation space to NDC (Normalized Device Coordinates).
 /// NDC ranges from [-1, 1] in all axes.

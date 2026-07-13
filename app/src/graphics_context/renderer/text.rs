@@ -63,7 +63,7 @@ impl Renderer for TextRenderer {
         });
     }
 
-    fn update_data(&mut self, data: Self::Data) {
+    fn set_data(&mut self, data: Self::Data) {
         self.data = data;
     }
 

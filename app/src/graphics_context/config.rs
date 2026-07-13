@@ -9,7 +9,7 @@ pub struct RendererConfig {
 impl Default for RendererConfig {
     fn default() -> Self {
         Self {
-            clear_color:   wgpu::Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+            clear_color:   wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
             present_mode:  wgpu::PresentMode::Fifo,
             depth_enabled: true,
             sample_count:  1,

@@ -12,17 +12,22 @@
 ///   not the step bookkeeping.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SimMetrics {
+    /// The configured simulation rate in Hz.
+    pub hz: f64, 
+
     /// Wall-clock milliseconds to complete all substeps of a single fixed step.
     /// Zero if no steps ran this frame.
     pub step_time_ms: f64,
 
-    /// Average wall-clock milliseconds per substep.
-    /// Zero if no substeps ran this frame.
-    pub substep_time_ms: f64,
+    pub storage_size: usize,
 
-    /// Number of fixed steps that ran during the last `simulate()` call.
-    /// 0 = frame too fast for sim rate, >1 = catching up after a slow frame.
-    pub steps_per_frame: u32,
+    // /// Average wall-clock milliseconds per substep.
+    // /// Zero if no substeps ran this frame.
+    // pub substep_time_ms: f64,
+
+    // /// Number of fixed steps that ran during the last `simulate()` call.
+    // /// 0 = frame too fast for sim rate, >1 = catching up after a slow frame.
+    // pub steps_per_frame: u32,
 
     /// Banked time (ms) waiting to be consumed by the next fixed step.
     /// Should oscillate near zero; a steadily growing value means the sim
@@ -32,6 +37,5 @@ pub struct SimMetrics {
     /// Total fixed steps executed since the simulation was created.
     pub total_ticks: u64,
 
-    /// The configured simulation rate in Hz.
-    pub hz: f64,
+   
 }

@@ -21,15 +21,13 @@ use crate::graphics_context::{
 pub struct HudMetric {
     pub label: String,
     pub value: String,
+    //pub align: TextAlign,
 }
-
-/// Shared metrics state written by any system and read by [`HudPass`].
-///
-/// Metrics are stored in insertion order and rendered top-to-bottom.
-/// Call [`HudState::set`] to insert or update a named metric.
+ 
+/// Shared metrics state written by any system and read by [`HudPass`]. 
 pub struct HudState {
     metrics: Vec<HudMetric>,
-}
+} 
 
 impl Default for HudState {
     fn default() -> Self {
@@ -66,16 +64,14 @@ impl HudState {
 ///
 pub struct HudPass {
     state: Arc<Mutex<HudState>>,
-    renderer: TextRenderer,
-    last_frame: Instant,
+    renderer: TextRenderer, 
 }
 
 impl HudPass {
     pub fn new(state: Arc<Mutex<HudState>>) -> Self {
         Self {
             state,
-            renderer: TextRenderer::new(TextParams { groups: vec![] }),
-            last_frame: Instant::now(),
+            renderer: TextRenderer::new(TextParams { groups: vec![] }), 
         }
     }
 
@@ -92,15 +88,17 @@ impl HudPass {
     fn build_params(metrics: &[HudMetric], config: &wgpu::SurfaceConfiguration) -> TextParams {
         let style   = Self::hud_style();
         let padding = EdgeInsets::none();
-        let label_w = 100.0_f32;
+        let label_w = 120.0_f32;
         let value_w = 160.0_f32;
         let value_x = 112.0_f32;
         let row_h   = 24.0_f32;
-        let bottom  = config.height as f32 - 12.0;
+        //let bottom  = config.height as f32 - 12.0;
+        let top  = style.font_size;
         let n       = metrics.len();
 
         let groups = metrics.iter().enumerate().map(|(i, m)| {
-            let y = bottom - (n - i) as f32 * row_h;
+            //let y = bottom - (n - i) as f32 * row_h;
+            let y = top + i as f32 * row_h;
             TextGroup {
                 style,
                 items: vec![
@@ -131,16 +129,12 @@ impl Pass for HudPass {
         queue: &wgpu::Queue,
         config: &wgpu::SurfaceConfiguration,
     ) { 
-        if let Ok(mut s) = self.state.try_lock() {
-            s.set("FPS",   format!("{:.0}",    if frame_time > 0.0 { 1.0 / frame_time } else { 0.0 }));
-            s.set("Frame", format!("{:.2} ms", frame_time * 1000.0));
-        }
-
+       
         let params = self.state.lock()
             .map(|s| Self::build_params(s.metrics(), config))
             .unwrap_or(TextParams { groups: vec![] });
 
-        self.renderer.update_data(params);
+        self.renderer.set_data(params);
         self.renderer.update(device, queue, config);
     }
 

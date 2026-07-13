@@ -13,7 +13,7 @@ pub trait Renderer {
     fn prepare(&mut self, device: &Device, queue: &Queue, config: &SurfaceConfiguration);
 
     /// Update the renderer's internal data.
-    fn update_data(&mut self, _data: Self::Data) {}
+    fn set_data(&mut self, _data: Self::Data) {}
 
     /// Update GPU buffers with the latest data from its internal state.
     /// Called every frame before `draw`.

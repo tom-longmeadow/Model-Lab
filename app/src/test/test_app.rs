@@ -17,7 +17,7 @@ impl AppLogic for TestApp {
 
     fn create_config(&self) -> RendererConfig {
         RendererConfig {
-            clear_color: wgpu::Color { r: 1.0, g: 0.1, b: 0.1, a: 1.0 },
+            //clear_color: wgpu::Color { r: 1.0, g: 0.1, b: 0.1, a: 1.0 },
             ..RendererConfig::default()
         }
     }

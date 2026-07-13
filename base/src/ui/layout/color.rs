@@ -1,3 +1,4 @@
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Color {
     pub r: u8,
@@ -59,6 +60,47 @@ impl Color {
             self.a as f32 / 255.0,
         ]
     }
+
+   
+    // Blend two u8 colors together by a percentage float (t is 0.0 to 1.0)
+    fn blend_colors(c1: &Color, c2: &Color, t: f32) -> Color {
+        let lerp_channel = |start: u8, end: u8| -> u8 {
+            let start_f = start as f32;
+            let end_f = end as f32;
+            (start_f + (end_f - start_f) * t).round() as u8
+        };
+
+        Color {
+            r: lerp_channel(c1.r, c2.r),
+            g: lerp_channel(c1.g, c2.g),
+            b: lerp_channel(c1.b, c2.b),
+            a: lerp_channel(c1.a, c2.a),
+        }
+    }
+
+    // Get the blended color at any specific percentage (0.0 to 1.0) along the Vec
+    pub fn get_color_at_percentage(colors: &[Color], percentage: f32) -> Color {
+        let count = colors.len();
+        
+        // Handle edge cases safely
+        if count == 0 { return Color::default(); }
+        if count == 1 { return colors[0]; }
+        
+        let p = percentage.clamp(0.0, 1.0);
+
+        // Scale percentage to the gradient segments
+        let scaled_p = p * (count - 1) as f32;
+        let index = scaled_p.floor() as usize;
+        let t = scaled_p - index as f32; // Fractional part between the two colors
+
+        // Handle the exact 1.0 boundary cleanly
+        if index >= count - 1 {
+            return colors[count - 1];
+        }
+
+        Self::blend_colors(&colors[index], &colors[index + 1], t)
+    }
+
 
 
 }

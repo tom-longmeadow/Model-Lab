@@ -6,8 +6,8 @@ use crate::{
 };
 
 pub trait Scene {
-    /// Update scene logic based on input.
-    fn update(&mut self, frame_time: f64, input: &InputState);
+    // /// Update scene logic based on input.
+    // fn update(&mut self, frame_time: f64, input: &InputState);
 
     /// Create the render passes needed for this scene.
     /// This is typically called only once at setup.
@@ -15,6 +15,6 @@ pub trait Scene {
 
     /// Update the render passes with the current scene state.
     /// This is called every frame before rendering.
-    fn update_passes(&mut self, frame_time: f64, renderer: &mut GraphicsContext);
+    fn update(&mut self, frame_time: f64, input: &InputState, renderer: &mut GraphicsContext);
 }
 
