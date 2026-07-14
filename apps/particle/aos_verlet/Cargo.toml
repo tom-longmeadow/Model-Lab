@@ -1,0 +1,22 @@
+[package]
+name = "particle_aos_verlet"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "particle_aos_verlet"
+path = "src/bin/particle_aos_verlet.rs"
+
+[dependencies]
+base = { workspace = true }  
+impls = { workspace = true }  
+app = { workspace = true }  
+pollster = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true }
+winit = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tracing-wasm = { workspace = true }
