@@ -40,6 +40,15 @@ impl Color {
         Color { r: 139, g: 0,   b: 255, a: 255 }, // Vibrant Purple / Violet
     ];
 
+    pub const WATER: [Color; 6] = [
+        Color { r: 0,   g: 32,  b: 96,  a: 255 }, // Deep Ocean Blue (Depth)
+        Color { r: 0,   g: 96,  b: 192, a: 255 }, // Classic Water Blue
+        Color { r: 0,   g: 160, b: 224, a: 255 }, // Bright Tropical Blue
+        Color { r: 64,  g: 224, b: 208, a: 255 }, // Vibrant Turquoise / Cyan
+        Color { r: 192, g: 240, b: 255, a: 255 }, // Shallow Aqua / Spray
+        Color { r: 255, g: 255, b: 255, a: 255 }, // Foam White (Highlight/Collisions)
+    ];
+
 
 
     pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Self {

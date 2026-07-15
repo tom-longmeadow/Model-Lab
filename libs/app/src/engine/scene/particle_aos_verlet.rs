@@ -39,10 +39,11 @@ where
             return;
         }
 
-        // Configuration constants 
+        let max_particles: usize = 300;
+
         let hz: f64 = 60.0;
-        let substep_count: u64 = 4;
-        let collision_iterations: u64 = 2;
+        let substep_count: u64 = 8;
+        let collision_iterations: u64 = 4;
         
         let padding: V = V::splat(30.0.into()); 
         let insets = Insets::<V>::symmetrical(padding);
@@ -55,19 +56,19 @@ where
         
         let lifecycle_start_tick: u64 = 50;
         let lifecycle_ticks_per_spawn: u64 = 3;  
-        let max_particles: usize = 250;
+        
         
         let mut velocity_components = vec![0.0.into(); V::DIM];
-        velocity_components[0] = 6.0.into();   
+        velocity_components[0] = 4.0.into();   
         if V::DIM > 1 {
-            velocity_components[1] = (-3.0).into(); 
+            velocity_components[1] = (-1.0).into(); 
         }
         let particle_initial_velocity: V = V::from_slice(&velocity_components);
 
         let mut relative_location_components = vec![0.0.into(); V::DIM];
-        relative_location_components[0] = 0.2.into();   
+        relative_location_components[0] = 0.05.into();   
         if V::DIM > 1 {
-            relative_location_components[1] = (0.8).into(); 
+            relative_location_components[1] = (0.95).into(); 
         } 
         let particle_relative_location: V = V::from_slice(&relative_location_components);
  

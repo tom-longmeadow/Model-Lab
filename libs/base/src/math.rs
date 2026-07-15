@@ -192,6 +192,9 @@ pub trait Vector:
     fn div_elementwise(self, other: Self) -> Self;
     fn mul_elementwise(self, other: Self) -> Self;
 
+    fn length_squared(self) -> Self::Scalar;
+    fn length(self) -> Self::Scalar;
+
     // fn cmpeq(self, other: Self) -> Self::Mask; 
     // fn cmpneq(self, other: Self) -> Self::Mask;
     fn cmplt(self, other: Self) -> Self::Mask;
@@ -234,6 +237,20 @@ macro_rules! impl_vector_for_alias {
              #[inline] 
             fn from_slice(slice: &[Self::Scalar]) -> Self { 
                 <$vector_type>::from_slice(slice) 
+            }
+
+             /// Calculates the squared length of the vector. 
+            /// Fast because it avoids a square root operation.
+            #[inline]
+            fn length_squared(self) -> Self::Scalar {
+                self.dot(self)
+            }
+
+            /// Calculates the actual magnitude of the vector.
+            /// Requires an expensive square root operation.
+            #[inline]
+            fn length(self) -> Self::Scalar {
+                self.length_squared().sqrt()
             }
             
             // #[inline] fn cmpeq(self, other: Self) -> Self::Mask { 

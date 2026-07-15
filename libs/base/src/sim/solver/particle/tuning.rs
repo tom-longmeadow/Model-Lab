@@ -14,16 +14,19 @@ pub struct ParticlePhysicsTuning<S: FloatScalar> {
     /// Frame-rate independent linear drag
     pub global_damping: S,           
     /// Surface friction
-    pub friction: S,                 
+    pub friction: S,  
+    /// Velocity cap to prevent tunneling
+    pub max_velocity: S,               
 }
 
 impl<S: FloatScalar> ParticlePhysicsTuning<S> { 
-    pub fn new(radius_min: S, collision_iterations: u64) -> Self {
+    pub fn new(radius_min: S, radius_max: S, collision_iterations: u64) -> Self {
         // Fallback or baseline restitution (0.5)
         let default_restitution = S::from_f64(0.5); 
         
         Self::with_all(
             radius_min, 
+            radius_max, 
             default_restitution,
             collision_iterations,
         )
@@ -31,18 +34,18 @@ impl<S: FloatScalar> ParticlePhysicsTuning<S> {
 
     pub fn with_all(
         radius_min: S, 
+        radius_max: S,
         restitution: S,
         collision_iterations: u64, 
     ) -> Self {  
         // Convert configurations and constants using your trait conversion
-        let iterations_f = S::from_f64(collision_iterations as f64);
-         
-
-        let slop_coefficient = S::from_f64(0.02);  // 2% of the reference radius
-        let bounce_threshold_factor = S::from_f64(0.05);  
-        let global_damping_constant = S::from_f64(0.05);
-        let friction_constant = S::from_f64(0.005);
-        let target_frame_bias = S::from_f64(0.2); 
+        let iterations_f = S::from_f64(collision_iterations as f64); 
+        let slop_coefficient = S::from_f64(0.02);   
+        let bounce_threshold_factor = S::from_f64(2.0);  
+        let global_damping_constant = S::from_f64(0.2);
+        let friction_constant = S::from_f64(0.3);
+        let target_frame_bias = S::from_f64(0.4);  
+        let max_velocity = radius_max * S::from_f64(600.0);  
 
         Self {
             restitution,
@@ -51,6 +54,7 @@ impl<S: FloatScalar> ParticlePhysicsTuning<S> {
             penetration_correction_bias: target_frame_bias / iterations_f, 
             global_damping: global_damping_constant,
             friction: friction_constant, 
+            max_velocity,
         }
     }
 }
@@ -58,7 +62,7 @@ impl<S: FloatScalar> ParticlePhysicsTuning<S> {
 impl<S: FloatScalar> Default for ParticlePhysicsTuning<S> {
     fn default() -> Self {
         let one = S::from_f64(1.0);
-        Self::new(one, 1)
+        Self::new(one, one,1)
     }
 }
 
