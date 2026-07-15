@@ -1,6 +1,6 @@
-use base::{math::Vector, sim::{solver::particle::verlet_particle::VerletParticle, storage::{AosCpuStorage, CpuStorage, Storage}}};
- 
+use crate::{math::Vector, sim::{solver::particle::verlet_particle::VerletParticle, storage::{AosCpuStorage, CpuStorage, Storage}}};
 
+ 
 
 pub struct AosVecStorage<V: Vector> {
     particles: Vec<VerletParticle<V>>,

@@ -8,8 +8,7 @@ name = "particle_aos_verlet"
 path = "src/bin/particle_aos_verlet.rs"
 
 [dependencies]
-base = { workspace = true }  
-impls = { workspace = true }  
+base = { workspace = true }   
 app = { workspace = true }  
 pollster = { workspace = true }
 tracing = { workspace = true }

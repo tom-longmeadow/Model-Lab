@@ -1,8 +1,7 @@
 use std::{marker::PhantomData, sync::{Arc, Mutex}};
  use std::hash::Hash;
-use base::{aabb::AABB, insets::Insets, math::Vector, sim::{lifecycle::stream_config::StreamConfig, simulation::Simulation, solver::particle::{verlet_particle::VerletParticle}, storage::CpuStorage}, ui::layout::color::Color};
-use impls::simulation::particle::{verlet_aos_gravity_solver::VerletAosGravitySolver, verlet_aos_stream_lifecycle::AosStreamLifecycle, verlet_aos_vec_storage::AosVecStorage};
-
+use base::{aabb::AABB, insets::Insets, math::Vector, sim::{lifecycle::stream_config::StreamConfig, simulation::Simulation, solver::particle::{verlet_aos_gravity_solver::VerletAosGravitySolver, verlet_aos_stream_lifecycle::AosStreamLifecycle, verlet_aos_vec_storage::AosVecStorage, verlet_particle::VerletParticle}, storage::CpuStorage}, ui::layout::color::Color};
+ 
 use crate::{
     engine::{input::InputState, scene::Scene},
     graphics_context::{
@@ -13,12 +12,12 @@ use crate::{
 };
 
 
-pub struct ParticleAosVerletScene<V: Vector> { 
+pub struct BallBounceParticleAosVerletScene<V: Vector> { 
     hud_state: Arc<Mutex<HudState>>,
     _marker: PhantomData<V>, // Necessary because V is not used in the struct fields
 }
 
-impl<V: Vector> ParticleAosVerletScene<V> {
+impl<V: Vector> BallBounceParticleAosVerletScene<V> {
     pub fn new() -> Self {
         Self { 
             hud_state: Arc::new(Mutex::new(HudState::default())),
@@ -27,7 +26,7 @@ impl<V: Vector> ParticleAosVerletScene<V> {
     }
 }
 
-impl<V: Vector + 'static> Scene for ParticleAosVerletScene<V> 
+impl<V: Vector + 'static> Scene for BallBounceParticleAosVerletScene<V> 
 where
     V::Scalar: From<f64>, 
     V::Quantized: Hash + Eq, 

@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-use base::{aabb::AABB, math::{DVec2, Vector}, sim::simulation::Simulate};
+use base::{aabb::AABB, math::{Vector}, sim::simulation::Simulate};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer}};
 
 

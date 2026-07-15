@@ -3,6 +3,7 @@ pub mod component;
 pub mod registry;
 pub mod error;
 pub mod config;
+pub mod examples;
  
 #[cfg(feature = "testing")]
 pub mod test;

@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use base::prelude::{
-    ComponentKey, ComponentKind, ComponentRegistry, 
-    HasKind, ModelConfig, 
-};
+
+use crate::model::{ComponentKey, ComponentKind, ComponentRegistry, HasKind, ModelConfig};
+ 
 
 pub struct HashMapRegistry<C: ModelConfig> {
     items: HashMap<ComponentKey<<C::Data as HasKind>::Kind>, C::Data>,
@@ -77,9 +76,11 @@ impl<C: ModelConfig> ComponentRegistry<C> for HashMapRegistry<C> {
 
  #[cfg(test)]
 mod tests { 
+    use crate::{test_model, test_registry};
+
     use super::*;
-    base::test_registry!(HashMapRegistry);
+     test_registry!(HashMapRegistry);
     
     // Test the high-level API
-    base::test_model!(HashMapRegistry);
+     test_model!(HashMapRegistry);
 }

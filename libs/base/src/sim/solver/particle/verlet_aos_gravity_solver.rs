@@ -1,8 +1,6 @@
-use base::{aabb::AABB, insets::Insets, math::{FloatScalar, Vector, VectorMask}, 
-    sim::{solver::{Solver, particle::{partition::{collision::CollisionRegistry, grid::{GridKey, UniformGrid}}, tuning::{self, ParticlePhysicsTuning}, verlet_physics::VerletPhysics}}, storage::{AosCpuStorage, Storage}}};
+use crate::{aabb::AABB, insets::Insets, math::{FloatScalar, Vector}, sim::{solver::{Solver, particle::{partition::{collision::CollisionRegistry, grid::UniformGrid}, tuning::ParticlePhysicsTuning, verlet_aos_vec_storage::AosVecStorage, verlet_physics::VerletPhysics}}, storage::{AosCpuStorage, Storage}}};
 use std::hash::Hash;
-use crate::simulation::particle::verlet_aos_vec_storage::AosVecStorage;
-
+ 
  
 pub struct VerletAosGravitySolver<V> 
 where 

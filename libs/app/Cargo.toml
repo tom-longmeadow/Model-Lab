@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-base = { workspace = true }  
-impls = { workspace = true }  
+base = { workspace = true }   
 
 wgpu = { workspace = true }
 tracing = { workspace = true }

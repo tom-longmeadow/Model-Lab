@@ -1,3 +1,4 @@
+pub mod registry_hashmap;
 use std::hash::Hash;
 use crate::prelude::{ModelConfig, HasKind}; 
 

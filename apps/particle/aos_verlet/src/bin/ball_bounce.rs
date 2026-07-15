@@ -1,22 +1,22 @@
  use app::{
     core::{AppLogic,  run_app}, 
-    engine::scene::{Scene, particle_aos_verlet::ParticleAosVerletScene}, 
+    engine::scene::{Scene, ball_bounce_particle_aos_verlet::BallBounceParticleAosVerletScene}, 
     graphics_context::config::RendererConfig,  
 };
 
 
-pub struct ParticleAosVerlet { 
+pub struct BallBounceParticleAosVerlet { 
 }
 
-impl ParticleAosVerlet {
+impl BallBounceParticleAosVerlet {
     pub fn new() -> Self {
         Self { }
     }
 }
 
-impl AppLogic for ParticleAosVerlet {
+impl AppLogic for BallBounceParticleAosVerlet {
     fn title(&self) -> &str {
-        "AOS Verlet Particle Simulation"
+        "Ball Bounce AOS Verlet Particle Simulation"
     }
 
     fn create_config(&self) -> RendererConfig {
@@ -24,13 +24,13 @@ impl AppLogic for ParticleAosVerlet {
     }
 
     fn create_scene(&self) -> Box<dyn Scene> { 
-        Box::new(ParticleAosVerletScene::new())
+        Box::new(BallBounceParticleAosVerletScene::new())
     }
 }
  
 
 fn main() {
-    let my_app = ParticleAosVerlet::new();
+    let my_app = BallBounceParticleAosVerlet::new();
     
     if let Err(e) = run_app(my_app) {
         eprintln!("Critical application crash: {}", e);

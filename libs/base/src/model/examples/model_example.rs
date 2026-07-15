@@ -1,12 +1,12 @@
-use base::prelude::*;
-use crate::language::DisplayText;
-use crate::model::registry_hashmap::HashMapRegistry;
+ 
 
 /*
     This Example shows how to declare the types and trait implementations to make a model.
     A more concise way to create the same types and traits can be found in the file:
     example_model_using_macros
 */
+
+use crate::{model::{ComponentData, ComponentKind, HasKind, ID64, Model, ModelConfig, registry_hashmap::HashMapRegistry}, prelude::{DisplayText, Locale, Propertied, PropertyConfig, PropertyName, PropertyNode, PropertySchema, PropertyValue, UnitConfig}, unit::{CompoundUnit, LengthUnit, MassUnit, SimpleUnit, TemperatureUnit, TimeUnit, UnitCategory, UnitKind, UnitSettings, UnitSystem}};
 
 /// CONFIG
 /// This allows us to glue all the types together so that we can start implementing

@@ -1,6 +1,5 @@
-use base::prelude::*;
-use impls::model::model_example::{ExampleModelConfig, ExampleUnitCategory};
-
+use base::{model::examples::model_example::{ExampleModelConfig, ExampleUnitCategory}, prelude::*};
+ 
 
 #[derive(Clone, Debug)]
 pub struct TestPart {

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::hash::Hash;
-use std::ops::{AddAssign, Mul, Sub, SubAssign};
-use crate::math::{FloatScalar, IVec2, IVec3, QuantizeInto, Vector};
+use std::hash::Hash; 
+use crate::math::{FloatScalar, IVec2, IVec3,  Vector};
 use crate::sim::solver::particle::partition::collision::CollisionRegistry; 
 
 // pub type UniformGrid2D = UniformGrid<IVec2, DVec2>;

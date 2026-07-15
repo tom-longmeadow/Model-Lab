@@ -1,16 +1,13 @@
 [workspace]
 members = [
-    "libs/base",
-    "libs/impls", 
-    "libs/app",
-
+    "libs/base", 
+    "libs/app", 
     "apps/particle/aos_verlet",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-app = { path = "libs/app" }
-impls = { path = "libs/impls" }
+app = { path = "libs/app" } 
 base = { path = "libs/base" }
 
 wgpu = "29.0.1"

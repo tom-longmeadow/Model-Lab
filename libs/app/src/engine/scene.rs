@@ -1,4 +1,4 @@
- pub mod particle_aos_verlet;
+ pub mod ball_bounce_particle_aos_verlet;
 
 use crate::{
     engine::input::InputState, 

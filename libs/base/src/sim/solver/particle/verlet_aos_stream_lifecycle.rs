@@ -1,8 +1,7 @@
-use base::{aabb::AABB, math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, solver::particle::verlet_particle::VerletParticle, storage::AosCpuStorage}};
-
-use crate::simulation::particle::verlet_aos_vec_storage::AosVecStorage;
-
+use crate::{aabb::AABB,  math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, solver::particle::{verlet_aos_vec_storage::AosVecStorage, verlet_particle::VerletParticle}, storage::AosCpuStorage}};
  
+ 
+
 pub struct AosStreamLifecycle<V: Vector> {
     pub config: StreamConfig<V>,
 }
