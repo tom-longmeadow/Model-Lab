@@ -47,31 +47,13 @@ where
         
         let padding: V = V::splat(30.0.into()); 
         let insets = Insets::<V>::symmetrical(padding);
-         
-        let mut gravity_components = vec![0.0.into(); V::DIM]; 
-        if V::DIM > 1 {
-            gravity_components[1] = (-1400.0).into(); 
-        } 
-        let gravity: V = V::from_slice(&gravity_components);
-        
-        let lifecycle_start_tick: u64 = 50;
-        let lifecycle_ticks_per_spawn: u64 = 3;  
-        
-        
-        let mut velocity_components = vec![0.0.into(); V::DIM];
-        velocity_components[0] = 4.0.into();   
-        if V::DIM > 1 {
-            velocity_components[1] = (-1.0).into(); 
-        }
-        let particle_initial_velocity: V = V::from_slice(&velocity_components);
 
-        let mut relative_location_components = vec![0.0.into(); V::DIM];
-        relative_location_components[0] = 0.05.into();   
-        if V::DIM > 1 {
-            relative_location_components[1] = (0.95).into(); 
-        } 
-        let particle_relative_location: V = V::from_slice(&relative_location_components);
- 
+        let gravity                    = V::from_f64_array([0.0, -1600.0]);
+        let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
+        let particle_relative_location = V::from_f64_array([0.05, 0.95]);
+
+        let lifecycle_start_tick: u64 = 50;
+        let lifecycle_ticks_per_spawn: u64 = 3;   
         let particle_radius: V::Scalar = 10.0.into();  
         let particle_colors: &'static [Color] = &Color::RAINBOW;
 

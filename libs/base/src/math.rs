@@ -203,8 +203,10 @@ pub trait Vector:
     fn select(mask: Self::Mask, true_val: Self, false_val: Self) -> Self;
     fn mask_and(lhs: Self::Mask, rhs: Self::Mask) -> Self::Mask;
     fn mask_or(lhs: Self::Mask, rhs: Self::Mask) -> Self::Mask;
+    
 
     fn from_slice(slice: &[Self::Scalar]) -> Self;
+    fn from_f64_array<const N: usize>(arr: [f64; N]) -> Self ;
 
     #[inline]
     fn contains_point(self, min_bound: Self, max_bound: Self) -> bool {
@@ -212,6 +214,8 @@ pub trait Vector:
         let out_max = self.cmpgt(max_bound);
         !Self::mask_or(out_min, out_max).any()
     }
+ 
+    
 }
 
 // ==========================================
@@ -237,6 +241,16 @@ macro_rules! impl_vector_for_alias {
              #[inline] 
             fn from_slice(slice: &[Self::Scalar]) -> Self { 
                 <$vector_type>::from_slice(slice) 
+            }
+
+             #[inline]
+            fn from_f64_array<const N: usize>(arr: [f64; N]) -> Self {
+                let mut components = [<$scalar as FloatScalar>::ZERO; $dim];
+                let limit = if N < $dim { N } else { $dim };
+                for i in 0..limit {
+                    components[i] = <$scalar as FloatScalar>::from_f64(arr[i]);
+                }
+                <$vector_type>::from_slice(&components)
             }
 
              /// Calculates the squared length of the vector. 
