@@ -1,11 +1,11 @@
 [package]
-name = "particle_aos_verlet"
+name = "ball_bounce"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "particle_aos_verlet"
-path = "src/bin/particle_aos_verlet.rs"
+name = "ball_bounce"
+path = "src/bin/ball_bounce.rs"
 
 [dependencies]
 base = { workspace = true }   

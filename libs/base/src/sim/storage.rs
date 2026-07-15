@@ -1,3 +1,5 @@
+use std::alloc::Layout;
+
 
 
 /// Represents any simulation storage.
@@ -21,14 +23,7 @@ pub trait Storage {
     fn post_step(&mut self) {}
 
     /// Remove all items.
-    fn clear(&mut self);
-
-     /// Removes all items at the given indices in a single pass.
-    /// Each storage type implements this in its own layout-native way:
-    /// - AoS: descending swap_remove
-    /// - SoA: descending swap_remove_cols
-    /// - GPU: parallel compaction shader
-    fn remove_indices(&mut self, indices: Vec<usize>);
+    fn clear(&mut self); 
 }
 
 
@@ -58,6 +53,28 @@ pub trait AosCpuStorage: CpuStorage {
     fn iter_mut(&mut self) -> std::slice::IterMut<'_, Self::Item> { self.as_slice_mut().iter_mut() }
 
     fn swap(&mut self, a: usize, b: usize) { self.as_slice_mut().swap(a, b); }
+
+    fn remove_indices(&mut self, indices: &mut [usize]) {
+        // 1. Sort descending as before
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        
+        let current_len = self.as_slice().len();
+        let mut last_seen = None;
+        
+        // 2. Filter out duplicates manually in a single pass
+        for &i in indices.iter() {
+            // Check if this index matches the previous one we processed
+            if Some(i) == last_seen {
+                continue; 
+            }
+            last_seen = Some(i);
+            
+            // 3. Perform the swap removal safely
+            if i < current_len {
+                self.swap_remove(i);
+            }
+        }
+    }
 }
 
 /// Struct-of-Arrays storage — data held in per-field column slices.
@@ -67,38 +84,52 @@ pub trait AosCpuStorage: CpuStorage {
 /// field type at compile time.
 pub trait SoaCpuStorage: CpuStorage {
     type Layout: SoaLayout;
-
-    /// Access to raw byte columns for layout-native operations.
-    fn columns_mut(&mut self) -> &mut [Vec<u8>];
-
-    /// Increment the length counter after a manual push_cols.
+ 
+    fn columns_mut(&mut self) -> &mut [RawColumn];
     fn increment_len(&mut self);
+}
+
+/// Added to prevent Undefined Behaviour from unaligned memory access
+pub struct RawColumn {
+    pub ptr: *mut u8,
+    pub cap: usize,
+    pub element_layout: Layout, // Tracks size and alignment requirements safely
 }
 
 /// Describes the column layout of a type that can live in SoA storage.
 /// Implement this on your entity struct — not on the storage.
 /// The storage impl uses this to manage raw byte columns; it knows nothing
 /// about field semantics. Typed safe accessors live in the physics sub-traits.
+/// 
 pub trait SoaLayout: Sized {
-    /// Byte stride of each column — one entry per field.
-    const STRIDES: &'static [usize];
+    // FIX: Replaced raw sizes with full memory layouts (size + alignment)
+    const LAYOUTS: &'static [Layout];
 
-    /// Push all fields into their respective byte columns.
-    fn push_cols(&self, cols: &mut [Vec<u8>]);
-
-    /// Reconstruct `Self` from byte columns at `index`.
-    fn read_cols(cols: &[Vec<u8>], index: usize) -> Self;
-
-    /// Swap-remove at `index` — keeps all columns in sync.
-    fn swap_remove_cols(cols: &mut [Vec<u8>], strides: &[usize], index: usize);
+    // FIX: Implementations must use standard safe copying routines 
+    // like `ptr::copy` or `ptr::write_unaligned`
+    unsafe fn push_cols(&self, cols: &mut [RawColumn]);
+    unsafe fn read_cols(cols: &[RawColumn], index: usize) -> Self;
+    unsafe fn swap_remove_cols(cols: &mut [RawColumn], index: usize);
 }
 
+
+// pub trait SoaLayout: Sized {
+//     /// Byte stride of each column — one entry per field.
+//     const STRIDES: &'static [usize];
+
+//     /// Push all fields into their respective byte columns.
+//     fn push_cols(&self, cols: &mut [Vec<u8>]);
+
+//     /// Reconstruct `Self` from byte columns at `index`.
+//     fn read_cols(cols: &[Vec<u8>], index: usize) -> Self;
+
+//     /// Swap-remove at `index` — keeps all columns in sync.
+//     fn swap_remove_cols(cols: &mut [Vec<u8>], strides: &[usize], index: usize);
+// }
+
 // ---------------------------------------------------------------------------
 // Test macros — any concrete impl invokes these to verify the contract.
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Test macros — any concrete impl invokes these to verify the contract.
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 
 /// Tests the [`CpuStorage`] contract.
 #[macro_export]

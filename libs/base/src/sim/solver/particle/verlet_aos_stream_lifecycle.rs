@@ -1,4 +1,5 @@
-use crate::{aabb::AABB,  math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, solver::particle::{verlet_aos_vec_storage::AosVecStorage, verlet_particle::VerletParticle}, storage::AosCpuStorage}};
+use crate::{aabb::AABB,  math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, 
+solver::{particle::{verlet_aos_vec_storage::VerletParticleAosVecStorage, verlet_particle::VerletParticle}}, storage::AosCpuStorage}};
  
  
 
@@ -12,14 +13,14 @@ impl<V: Vector> AosStreamLifecycle<V> {
     }
 }
 
-impl<V: Vector> Lifecycle<AosVecStorage<V>> for AosStreamLifecycle<V> 
+impl<V: Vector> Lifecycle<VerletParticleAosVecStorage<V>> for AosStreamLifecycle<V> 
 where
     V: std::ops::Sub<Output = V>, 
 {
     // Fixes the trait mismatch error by providing the concrete type
     type Bounds = AABB<V>;
 
-    fn tick(&mut self, storage: &mut AosVecStorage<V>, tick: u64, bounds: &Self::Bounds) {
+    fn tick(&mut self, storage: &mut VerletParticleAosVecStorage<V>, tick: u64, bounds: &Self::Bounds) {
         if self.config.should_spawn(tick) {
             let position = self.config.get_spawn_position(bounds);
             let color = self.config.get_color();

@@ -1,4 +1,5 @@
 pub mod particle; 
+pub mod aos_vec_storage;
 
 use crate::{sim::storage::Storage};
 

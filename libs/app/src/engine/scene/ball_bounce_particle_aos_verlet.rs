@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::{Arc, Mutex}};
  use std::hash::Hash;
-use base::{aabb::AABB, insets::Insets, math::Vector, sim::{lifecycle::stream_config::StreamConfig, simulation::Simulation, solver::particle::{verlet_aos_gravity_solver::VerletAosGravitySolver, verlet_aos_stream_lifecycle::AosStreamLifecycle, verlet_aos_vec_storage::AosVecStorage, verlet_particle::VerletParticle}, storage::CpuStorage}, ui::layout::color::Color};
+use base::{aabb::AABB, insets::Insets, math::Vector, sim::{lifecycle::stream_config::StreamConfig, simulation::Simulation, 
+    solver::particle::{verlet_aos_gravity_solver::VerletAosGravitySolver, verlet_aos_stream_lifecycle::AosStreamLifecycle, verlet_aos_vec_storage::VerletParticleAosVecStorage, verlet_particle::VerletParticle}, storage::CpuStorage}, ui::layout::color::Color};
  
 use crate::{
     engine::{input::InputState, scene::Scene},
@@ -30,7 +31,7 @@ impl<V: Vector + 'static> Scene for BallBounceParticleAosVerletScene<V>
 where
     V::Scalar: From<f64>, 
     V::Quantized: Hash + Eq, 
-    AosSimulationRenderer<VerletParticle<V>>: SimulationRenderer<AosVecStorage<V>>,
+    AosSimulationRenderer<VerletParticle<V>>: SimulationRenderer<VerletParticleAosVecStorage<V>>,
     V: From<(f64, f64)>, 
 {
     fn build_passes(&mut self, renderer: &mut GraphicsContext) {
@@ -68,7 +69,7 @@ where
         
         let sim = Simulation::new(
             hz,
-            <AosVecStorage<V> as CpuStorage>::new(max_particles),
+            <VerletParticleAosVecStorage<V> as CpuStorage>::new(max_particles),
             VerletAosGravitySolver::<V>::new(substep_count, collision_iterations, gravity, insets, max_particles),
             AosStreamLifecycle::<V>::new(stream_config),
             AABB::<V>::default(), 

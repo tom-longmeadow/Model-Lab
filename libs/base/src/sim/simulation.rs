@@ -172,11 +172,7 @@ mod tests {
         
         fn clear(&mut self) {
             self.data.clear(); 
-        }
-        
-        fn remove_indices(&mut self, _indices: Vec<usize>) {
-            todo!()
-        }
+        }  
     }
 
     impl CpuStorage for MockStorage {

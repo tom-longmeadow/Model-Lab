@@ -135,6 +135,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
+name = "ball_bounce"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
+]
+
+[[package]]
 name = "base"
 version = "0.1.0"
 dependencies = [
@@ -1382,19 +1395,6 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link",
-]
-
-[[package]]
-name = "particle_aos_verlet"
-version = "0.1.0"
-dependencies = [
- "app",
- "base",
- "pollster",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "winit",
 ]
 
 [[package]]

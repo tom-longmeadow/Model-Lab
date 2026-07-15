@@ -1,4 +1,5 @@
-use crate::{aabb::AABB, insets::Insets, math::{FloatScalar, Vector}, sim::{solver::{Solver, particle::{partition::{collision::CollisionRegistry, grid::UniformGrid}, tuning::ParticlePhysicsTuning, verlet_aos_vec_storage::AosVecStorage, verlet_physics::VerletPhysics}}, storage::{AosCpuStorage, Storage}}};
+use crate::{aabb::AABB, insets::Insets, math::{FloatScalar, Vector}, sim::{solver::{Solver, 
+    particle::{partition::{collision::CollisionRegistry, grid::UniformGrid}, tuning::ParticlePhysicsTuning, verlet_aos_vec_storage::VerletParticleAosVecStorage, verlet_physics::VerletPhysics}}, storage::{AosCpuStorage, Storage}}};
 use std::hash::Hash;
  
  
@@ -60,7 +61,7 @@ where
 }
  
 
-impl<V> Solver<AosVecStorage<V>> for VerletAosGravitySolver<V>
+impl<V> Solver<VerletParticleAosVecStorage<V>> for VerletAosGravitySolver<V>
 where 
     V: Vector,
     V::Quantized: Hash + Eq,
@@ -70,11 +71,11 @@ where
 
     fn substep_count(&self) -> u64 { self.substep_count }
 
-    fn init(&mut self, _storage: &mut AosVecStorage<V>) { }
+    fn init(&mut self, _storage: &mut VerletParticleAosVecStorage<V>) { }
 
-    fn post_step(&mut self, _storage: &mut AosVecStorage<V>, _dt: f64) {  }
+    fn post_step(&mut self, _storage: &mut VerletParticleAosVecStorage<V>, _dt: f64) {  }
     
-    fn pre_step(&mut self, storage: &mut AosVecStorage<V>, _dt: f64, _tick: u64, bounds: &AABB<V>) {
+    fn pre_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, _dt: f64, _tick: u64, bounds: &AABB<V>) {
 
 
         self.tuning.update_jitter(_tick);
@@ -121,7 +122,7 @@ where
        
     }
 
-    fn sub_step(&mut self, storage: &mut AosVecStorage<V>, dt: f64) {
+    fn sub_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, dt: f64) {
         // KINETICS PASS 
         let sub_step_dt = <V::Scalar as FloatScalar>::from_f64(dt);
         for p in storage.iter_mut() {
@@ -254,7 +255,7 @@ where
         for (i, p) in storage.iter_mut().enumerate() {
             let pos = self.scratch_pos[i];
             let mut pos_old = self.scratch_pos_old[i];
-            let vel = pos - pos_old;
+            let vel: V = pos - pos_old;
             let vel_sq = vel.length_squared();
 
             if vel_sq > max_vel_squared {
