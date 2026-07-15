@@ -109,6 +109,7 @@ impl Engine {
             Err(RendererError::Lost)        => {
                 tracing::warn!("Surface lost/outdated — reconfiguring");
                 self.graphics.reconfigure();
+                return; // 👈 Add this to drop out of the render function immediately!
             }
             Err(RendererError::Occluded) |
             Err(RendererError::Timeout)     => {

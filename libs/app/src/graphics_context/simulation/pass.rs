@@ -1,6 +1,10 @@
 use std::sync::{Arc, Mutex};
-use base::{math::Bounds, sim::{simulation::Simulate}};
+use base::{aabb::AABB, math::{DVec2, Vector}, sim::simulation::Simulate};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer}};
+
+
+ 
+
 
 /// Strategy for handling window resize events in relation to simulation bounds.
 //#[derive(Debug, Clone, Copy)]
@@ -73,22 +77,22 @@ where
     // }
 }
 
-impl<S, R> Pass for SimulationPass<S, R>
+impl<S, R, V> Pass for SimulationPass<S, R>
 where
-    S: Simulate + 'static,
+    S: Simulate<Bounds = AABB<V>> + 'static, // Constrain bounds to AABB of some Vector type V
+    V: Vector + From<(f64, f64)>,            // V must know how to ingest the 2D window size
     R: SimulationRenderer<S::Storage> + 'static,
 {
     fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
-        // For Dynamic strategy, bounds = window dimensions in pixels
-        // Bottom-left stays at (0,0), top-right expands to (width, height)
-        let new_bounds = Bounds::new_2d((0.0, 0.0),(config.width as f64, config.height as f64));
+         
+        let max_pos = V::from((config.width as f64, config.height as f64));
+        let min_pos = V::ZERO;  
+        let new_bounds = AABB::new(min_pos, max_pos);
              
         self.simulation.set_bounds(new_bounds); 
         self.renderer.prepare(device, queue, config);
         
-        // // Calculate transform after potentially updating sim_bounds
-        // self.transform = Self::calculate_transform(self, config);
-        // self.renderer.set_transform(self.transform);
+       
     }
 
     fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {

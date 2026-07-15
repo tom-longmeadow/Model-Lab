@@ -1,1 +1,1 @@
-pub mod verlet_2d;
+pub mod particle;

@@ -1,19 +1,18 @@
-use base::sim::storage::{AosCpuStorage, CpuStorage, Storage};
+use base::{math::Vector, sim::{solver::particle::verlet_particle::VerletParticle, storage::{AosCpuStorage, CpuStorage, Storage}}};
+ 
 
-use crate::simulation::verlet_2d::particle::Particle;
 
-
-pub struct AosVecStorage {
-    particles: Vec<Particle>,
+pub struct AosVecStorage<V: Vector> {
+    particles: Vec<VerletParticle<V>>,
 }
 
-impl AosVecStorage {
+impl<V: Vector> AosVecStorage<V> {
     pub fn new() -> Self {
         Self { particles: Vec::new() }
     }
 }
 
-impl Storage for AosVecStorage {
+impl<V: Vector> Storage for AosVecStorage<V> {
     fn len(&self) -> usize { 
         self.particles.len() 
     }
@@ -34,28 +33,28 @@ impl Storage for AosVecStorage {
     }
 }
 
-impl CpuStorage for AosVecStorage {
+impl<V: Vector> CpuStorage for AosVecStorage<V> {
     fn new(capacity: usize) -> Self {
         Self { particles: Vec::with_capacity(capacity) }
     }
 }
 
-impl AosCpuStorage for AosVecStorage {
-    type Item = Particle;
+impl<V: Vector> AosCpuStorage for AosVecStorage<V> {
+    type Item = VerletParticle<V>;
 
-    fn push(&mut self, item: Particle) {
+    fn push(&mut self, item: Self::Item) {
         self.particles.push(item);
     }
 
-    fn swap_remove(&mut self, index: usize) -> Particle {
+    fn swap_remove(&mut self, index: usize) -> Self::Item {
         self.particles.swap_remove(index)
     }
 
-    fn as_slice(&self) -> &[Particle] {
+    fn as_slice(&self) -> &[Self::Item] {
         &self.particles
     }
 
-    fn as_slice_mut(&mut self) -> &mut [Particle] {
+    fn as_slice_mut(&mut self) -> &mut [Self::Item] {
         &mut self.particles
     }
 }

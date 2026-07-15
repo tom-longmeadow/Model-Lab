@@ -1,6 +1,6 @@
-use impls::simulation::verlet_2d::particle::Particle;
+ 
 use wgpu::util::DeviceExt;
-use base::sim::storage::AosCpuStorage;
+use base::{math::{DVec2}, sim::{solver::particle::verlet_particle::VerletParticle, storage::AosCpuStorage}};
 use crate::graphics_context::{
     renderer::Renderer, shader::{
         ShaderBuilder,
@@ -10,6 +10,8 @@ use crate::graphics_context::{
         vertex_output::VertexOutput,
     }, simulation::{renderer::SimulationRenderer}, vertex::GpuVertex
 };
+
+pub type MyVerletParticle = VerletParticle<DVec2>;
 
 // Ensure the struct matches uniform alignment rules (multiples of 16 bytes)
 #[repr(C)]
@@ -23,7 +25,8 @@ struct ScreenUniforms {
 
 fn particle_layout() -> wgpu::VertexBufferLayout<'static> {
    wgpu::VertexBufferLayout {
-        array_stride: std::mem::size_of::<Particle>() as wgpu::BufferAddress,
+        array_stride: MyVerletParticle::STRIDE as wgpu::BufferAddress,
+
         step_mode: wgpu::VertexStepMode::Instance,
         attributes: &[
             // 1. pos (glam::DVec2 = 16 bytes). Starts at byte index 0.
@@ -83,7 +86,7 @@ impl<I> AosSimulationRenderer<I> {
     }
 }
 
-impl<S: AosCpuStorage<Item = Particle>> SimulationRenderer<S> for AosSimulationRenderer<Particle> {
+impl<S: AosCpuStorage<Item = MyVerletParticle>> SimulationRenderer<S> for AosSimulationRenderer<MyVerletParticle> {
     fn sync(&mut self, storage: &S, _config: &wgpu::SurfaceConfiguration) {
         
         let items = storage.as_slice();
@@ -95,7 +98,8 @@ impl<S: AosCpuStorage<Item = Particle>> SimulationRenderer<S> for AosSimulationR
             return;
         } 
         self.raw_data_ptr = items.as_ptr() as *const u8;
-        self.raw_data_bytes = items.len() * std::mem::size_of::<Particle>(); 
+        //self.raw_data_bytes = items.len() * std::mem::size_of::<Verlet_Particle>(); Verlet_Particle::STRIDE
+        self.raw_data_bytes = items.len() * (MyVerletParticle::STRIDE as usize);
     }
  
 }

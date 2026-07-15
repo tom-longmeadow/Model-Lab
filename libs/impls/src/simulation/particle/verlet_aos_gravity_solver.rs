@@ -1,87 +1,100 @@
-use base::{math::{Bounds, DVec2}, sim::{solver::{Solver, constraint::{Insets, RectConstraint}, partition::{collision::CollisionRegistry, grid::UniformGrid2D}, solver_2d::Solver2D, tuning::ParticlePhysicsTuning, verlet::VerletSolver}, storage::{AosCpuStorage, Storage}}};
+use base::{aabb::AABB, insets::Insets, math::{FloatScalar, Vector, VectorMask}, 
+    sim::{solver::{Solver, particle::{partition::{collision::CollisionRegistry, grid::{GridKey, UniformGrid}}, tuning::ParticlePhysicsTuning, verlet_physics::VerletPhysics}}, storage::{AosCpuStorage, Storage}}};
+use std::hash::Hash;
+use crate::simulation::particle::verlet_aos_vec_storage::AosVecStorage;
 
-use crate::simulation::verlet_2d::aos_vec_storage::AosVecStorage;
-
-
-
-pub struct VerletGravitySolver {
+ 
+pub struct VerletAosGravitySolver<V> 
+where 
+    V: Vector,
+    V::Quantized: Hash + Eq, 
+{
     // 1. Simulation Stepping Control
     pub substep_count: u64,
     pub collision_iterations: u64,
-    pub gravity: f64,
+    pub gravity: V,
     
     // 2. The Unified Engine Configuration
-    pub tuning: ParticlePhysicsTuning,
+    pub tuning: ParticlePhysicsTuning<V::Scalar>,
     
     // 3. Environment & Spatial Partitioning
-    pub bounds: RectConstraint,
-    pub insets: Insets,
-    pub grid: UniformGrid2D,
+    pub bounds: AABB<V>,
+    pub insets: Insets<V>,
+    pub grid: UniformGrid<V>, // Constrained directly to your UniformGrid type
 
     // 4. Flat Cache-Friendly Scratch Buffers  
-    scratch_pos: Vec<DVec2>, 
-    scratch_pos_old: Vec<DVec2>, 
-    scratch_radii: Vec<f64>,
+    pub scratch_pos: Vec<V>, 
+    pub scratch_pos_old: Vec<V>, 
+    pub scratch_radii: Vec<V::Scalar>,
 }
 
-impl VerletGravitySolver {
-    /// Constructs a new GravitySolver instance with custom configuration presets.
-    /// Allocates empty scratch buffers that scale dynamically at runtime.
+impl<V> VerletAosGravitySolver<V>
+where 
+    V: Vector, 
+    V::Quantized: Hash + Eq,
+{
+    /// Creates a fresh solver instance matching your dimension variants
     pub fn new(
         substep_count: u64,
         collision_iterations: u64,
-        gravity: f64,
-        insets: Insets, 
+        gravity: V, 
+        insets: Insets<V>, 
+        initial_capacity: usize,
     ) -> Self {
+
         // Initialize your spatial partitioning grid. 
         // Note: cell_size will be dynamically updated by your pre_step loop later.
-        let initial_cell_size = 1.0; 
-        let grid = UniformGrid2D::new(initial_cell_size);
-
+        let initial_cell_size: V::Scalar = <V::Scalar as FloatScalar>::from_f64(1.0);
+        let grid = UniformGrid::<V>::new(initial_cell_size);
+        let bounds = AABB::<V>::default(); 
+        let tuning = ParticlePhysicsTuning::<V::Scalar>::new(initial_cell_size, collision_iterations);
+        
         Self {
             substep_count,
             collision_iterations,
             gravity,
-            
-            // These objects are managed and populated inside your lifecycles (pre_step / sub_step)
-            tuning: ParticlePhysicsTuning::default(), 
-            bounds: RectConstraint::default(),
-            
+            tuning,
+            bounds,
             insets,
             grid,
-
-            // Reusable memory block frames initialized with zero allocations upfront
-            scratch_pos: Vec::new(), 
-            scratch_pos_old: Vec::new(), 
-            scratch_radii: Vec::new(), 
+            scratch_pos: Vec::with_capacity(initial_capacity),
+            scratch_pos_old: Vec::with_capacity(initial_capacity),
+            scratch_radii: Vec::with_capacity(initial_capacity),
         }
     }
-
-   
 }
+ 
 
-impl Solver<AosVecStorage> for VerletGravitySolver {
+impl<V> Solver<AosVecStorage<V>> for VerletAosGravitySolver<V>
+where 
+    V: Vector,
+    V::Quantized: Hash + Eq,
+{
+
+    type Bounds = AABB<V>;
 
     fn substep_count(&self) -> u64 { self.substep_count }
 
-    fn init(&mut self, _storage: &mut AosVecStorage) { }
+    fn init(&mut self, _storage: &mut AosVecStorage<V>) { }
 
-    fn post_step(&mut self, _storage: &mut AosVecStorage, _dt: f64) {  }
+    fn post_step(&mut self, _storage: &mut AosVecStorage<V>, _dt: f64) {  }
     
-    fn pre_step(&mut self, storage: &mut AosVecStorage, _dt: f64, _tick: u64, bounds: &Bounds) {
+    fn pre_step(&mut self, storage: &mut AosVecStorage<V>, _dt: f64, _tick: u64, bounds: &AABB<V>) {
 
         // 1. Construct the new constraint area
-        let new_bounds = RectConstraint::from_dvec3(bounds.min, bounds.max, &self.insets);
+        let new_bounds = AABB::from_insets(bounds, &self.insets);
         
         // 2. DETECT CHANGE: Check if this is a subsequent frame and the window size actually changed
         // (Ensure you have a way to know if self.bounds was already initialized, or check if min/max differ)
         if self.bounds.min != new_bounds.min || self.bounds.max != new_bounds.max {
-            let bounds_initialized = self.bounds.max.x > self.bounds.min.x;
-            
-            if bounds_initialized {
+    
+         
+                let bounds_initialized = self.bounds.max.cmpgt(self.bounds.min).any();
+
+                if bounds_initialized {
                 for p in storage.iter_mut() {
                     // Both axes updated gracefully in a single assignment step
-                    VerletSolver::scale_to_bounds_2d(
+                    VerletPhysics::scale_to_bounds(
                         &mut p.pos,
                         &mut p.pos_old,
                         self.bounds.min,
@@ -100,103 +113,208 @@ impl Solver<AosVecStorage> for VerletGravitySolver {
         if storage.len() != self.scratch_radii.len() {
             self.scratch_radii.clear();
 
-            let mut min_radius = f64::INFINITY;
-            let mut max_radius = f64::NEG_INFINITY;
+            type S<V> = <V as Vector>::Scalar; 
+            let mut min_radius = S::<V>::INFINITY;
+            let mut max_radius = S::<V>::NEG_INFINITY;
 
-            for p in storage.iter() {
+            for p in storage.as_slice().iter() {
                 self.scratch_radii.push(p.radius);
 
                 if p.radius < min_radius { min_radius = p.radius; }
                 if p.radius > max_radius { max_radius = p.radius; }
             }
 
-            self.grid.set_cell_size(max_radius); 
+            self.grid.set_cell_size(max_radius);  
+
             self.tuning = ParticlePhysicsTuning::new(min_radius, self.collision_iterations);
         } 
     }
 
-    fn sub_step(&mut self, storage: &mut AosVecStorage, dt: f64) {
+    fn sub_step(&mut self, storage: &mut AosVecStorage<V>, dt: f64) {
+
+
         // --- PHASE 1: KINETICS PASS ---
-        for p in storage.iter_mut() {
-            let mut acc_x = 0.0;
-            let mut acc_y = -self.gravity;
+let scalar_dt = <V::Scalar as FloatScalar>::from_f64(dt);
 
-            VerletSolver::update_kinetics(&self.tuning, &mut p.pos.x, &mut p.pos_old.x, dt, &mut acc_x);
-            VerletSolver::update_kinetics(&self.tuning, &mut p.pos.y, &mut p.pos_old.y, dt, &mut acc_y);
-        }
+for p in storage.iter_mut() {
+    let mut acc: V = V::ZERO; 
+    acc += self.gravity;
+    VerletPhysics::update_kinetics(&self.tuning, &mut p.pos, &mut p.pos_old, scalar_dt, &mut acc);
+}
 
-        // --- PHASE 2: PARTICLE-TO-PARTICLE COLLISIONS VIA REGISTRY ---
-        let mut collisions = CollisionRegistry::new();
-        let len = storage.len();
+// --- PHASE 2 & 3: UNIFIED CONSTRAINT & COLLISION LOOP ---
+let mut collisions = CollisionRegistry::new();
+let len = storage.len();
 
-        // 1. Synchronize scratch position and radius data once from storage
-        self.scratch_pos.clear();
-        self.scratch_pos_old.clear();
-        for p in storage.iter() {
-            self.scratch_pos.push(p.pos);
-            self.scratch_pos_old.push(p.pos_old);
-        }
+// 1. Synchronize scratch arrays from storage
+self.scratch_pos.clear();
+self.scratch_pos_old.clear();
+for p in storage.iter() {
+    self.scratch_pos.push(p.pos);
+    self.scratch_pos_old.push(p.pos_old);
+}
 
-        // 2. Run the heavy O(N^2) detection loop exactly once
-        Solver2D.detect_collisions(len, &self.scratch_radii, &self.scratch_pos, &mut collisions);
+// 2. Run the heavy spatial partition / broadphase detection once
+VerletPhysics.detect_collisions(len, &self.scratch_radii, &self.scratch_pos, &mut collisions);
 
-        // 3. Relax constraints over multiple iterations using the updated pure function
-        for _ in 0..self.collision_iterations {
-            for collision in &collisions.pairs {
-                let a = collision.a_index;
-                let b = collision.b_index;
+// 3. Relax ALL positional constraints simultaneously
+for _ in 0..self.collision_iterations {
+    // Inter-particle constraints
+    for collision in &collisions.pairs {
+        let a = collision.a_index;
+        let b = collision.b_index;
+        if a == b { continue; }
 
-                // Extract mutable pointers or references to our scratch coordinates safely
-                let (pos_a, pos_b) = if a < b {
-                    let (left, right) = self.scratch_pos.split_at_mut(b);
-                    (&mut left[a], &mut right[0])
-                } else {
-                    continue; // Protected by deterministic ordering from your registry constructor
-                };
+        let (pos_a, pos_b, pos_old_a, pos_old_b) = unsafe {
+            let pos_ptr = self.scratch_pos.as_mut_ptr();
+            let old_ptr = self.scratch_pos_old.as_mut_ptr();
+            (
+                &mut *pos_ptr.add(a),
+                &mut *pos_ptr.add(b),
+                &mut *old_ptr.add(a),
+                &mut *old_ptr.add(b),
+            )
+        };
 
-                Solver2D::resolve_particle_collisions(
-                    &self.tuning, 
-                    pos_a,
-                    pos_b,
-                    self.scratch_radii[a],
-                    self.scratch_radii[b],
-                );
-            }
-        }
+        let inv_mass = <V::Scalar as FloatScalar>::from_f64(1.0);
 
-         // 3b. Relax constraints over multiple iterations using the updated pure function
-        for collision in &collisions.pairs {
-            let a = collision.a_index;
-            let b = collision.b_index;
+        VerletPhysics::resolve_particle_collisions(
+            &self.tuning, pos_a, pos_old_a, pos_b, pos_old_b,
+            self.scratch_radii[a], self.scratch_radii[b], inv_mass, inv_mass,
+        );
+    }
 
-            // Use standard Vec method .as_mut_slice() and index right[0] safely
-            let (pos_old_a, pos_old_b) = if a < b {
-                let (left, right) = self.scratch_pos_old.as_mut_slice().split_at_mut(b);
-                (&mut left[a], &mut right[0]) // Fixed: right[0] targets original index b
-            } else {
-                continue;
-            };
+    // CRITICAL FIX: Evaluate boundaries DURING relaxation so particles push against each other *and* the wall
+    for i in 0..len {
+        VerletPhysics::apply_position_constraints(
+            &self.tuning, self.bounds.min, self.bounds.max, 
+            self.scratch_radii[i], &mut self.scratch_pos[i], &mut self.scratch_pos_old[i]
+        );
+    }
+}
 
-            VerletSolver::apply_collision_restitution(
-                &self.tuning,
-                &self.scratch_pos[a],
-                &self.scratch_pos[b],
-                pos_old_a,
-                pos_old_b,
-                self.scratch_radii[a],
-                self.scratch_radii[b],
-            );
-        }
+// 4. Apply restitution phase using the completely relaxed positions
+for collision in &collisions.pairs {
+    let a = collision.a_index;
+    let b = collision.b_index;
 
-        // 4. Commit final relaxed positions back to storage
-        for (i, p) in storage.iter_mut().enumerate() {
-            p.pos = self.scratch_pos[i];
-        }
+    let (pos_old_a, pos_old_b) = if a < b {
+        let (left, right) = self.scratch_pos_old.as_mut_slice().split_at_mut(b);
+        (&mut left[a], &mut right[0])
+    } else {
+        continue;
+    };
 
-        // --- PHASE 3: BOUNDARY CONSTRAINTS PASS ---
-        for p in storage.iter_mut() {
-            VerletSolver::apply_position_constraints_2d(&self.tuning, self.bounds.min, self.bounds.max, p.radius, &mut p.pos, &mut p.pos_old); 
-        }
+    VerletPhysics::apply_collision_restitution(
+        &self.tuning, &self.scratch_pos[a], &self.scratch_pos[b],
+        pos_old_a, pos_old_b, self.scratch_radii[a], self.scratch_radii[b],
+    );
+}
+
+// 5. Commit everything back to storage uniformly
+for (i, p) in storage.iter_mut().enumerate() {
+    p.pos = self.scratch_pos[i];
+    p.pos_old = self.scratch_pos_old[i]; // Ensure old positions (velocity) carry over!
+}
+
+        // // --- PHASE 1: KINETICS PASS ---
+        // let scalar_dt = <V::Scalar as FloatScalar>::from_f64(dt);
+
+        // for p in storage.iter_mut() {
+        //     let mut acc: V = V::ZERO; 
+        //     acc += self.gravity;
+
+        //     VerletPhysics::update_kinetics(&self.tuning, &mut p.pos, &mut p.pos_old, scalar_dt, &mut acc);
+             
+        // }
+
+        // // --- PHASE 2: PARTICLE-TO-PARTICLE COLLISIONS VIA REGISTRY ---
+        // let mut collisions = CollisionRegistry::new();
+        // let len = storage.len();
+
+        // // 1. Synchronize scratch position and radius data once from storage
+        // self.scratch_pos.clear();
+        // self.scratch_pos_old.clear();
+        // for p in storage.iter() {
+        //     self.scratch_pos.push(p.pos);
+        //     self.scratch_pos_old.push(p.pos_old);
+        // }
+
+        // // 2. Run the heavy O(N^2) detection loop exactly once
+        // VerletPhysics.detect_collisions(len, &self.scratch_radii, &self.scratch_pos, &mut collisions);
+
+        // // 3. Relax constraints over multiple iterations using the updated pure function
+        // for _ in 0..self.collision_iterations {
+        //     for collision in &collisions.pairs {
+        //         let a = collision.a_index;
+        //         let b = collision.b_index;
+
+        //         // Ensure we never alias the exact same index
+        //         if a == b { continue; }
+
+        //         // Bypassing the borrow checker safely using raw pointer offsets
+        //         let (pos_a, pos_b, pos_old_a, pos_old_b) = unsafe {
+        //             let pos_ptr = self.scratch_pos.as_mut_ptr();
+        //             let old_ptr = self.scratch_pos_old.as_mut_ptr();
+
+        //             (
+        //                 &mut *pos_ptr.add(a),
+        //                 &mut *pos_ptr.add(b),
+        //                 &mut *old_ptr.add(a),
+        //                 &mut *old_ptr.add(b),
+        //             )
+        //         };
+
+        //         let inv_mass_a = <V::Scalar as FloatScalar>::from_f64(1.0);
+        //         let inv_mass_b = <V::Scalar as FloatScalar>::from_f64(1.0);
+
+        //         VerletPhysics::resolve_particle_collisions(
+        //             &self.tuning, 
+        //             pos_a,
+        //             pos_old_a,
+        //             pos_b,
+        //             pos_old_b,
+        //             self.scratch_radii[a],
+        //             self.scratch_radii[b],
+        //             inv_mass_a,  
+        //             inv_mass_b,
+        //         );
+        //     }
+        // }
+
+        //  // 3b. Relax constraints over multiple iterations using the updated pure function
+        // for collision in &collisions.pairs {
+        //     let a = collision.a_index;
+        //     let b = collision.b_index;
+
+        //     // Use standard Vec method .as_mut_slice() and index right[0] safely
+        //     let (pos_old_a, pos_old_b) = if a < b {
+        //         let (left, right) = self.scratch_pos_old.as_mut_slice().split_at_mut(b);
+        //         (&mut left[a], &mut right[0]) // Fixed: right[0] targets original index b
+        //     } else {
+        //         continue;
+        //     };
+
+        //     VerletPhysics::apply_collision_restitution(
+        //         &self.tuning,
+        //         &self.scratch_pos[a],
+        //         &self.scratch_pos[b],
+        //         pos_old_a,
+        //         pos_old_b,
+        //         self.scratch_radii[a],
+        //         self.scratch_radii[b],
+        //     );
+        // }
+
+        // // 4. Commit final relaxed positions back to storage
+        // for (i, p) in storage.iter_mut().enumerate() {
+        //     p.pos = self.scratch_pos[i];
+        // }
+
+        // // --- PHASE 3: BOUNDARY CONSTRAINTS PASS ---
+        // for p in storage.iter_mut() {
+        //     VerletPhysics::apply_position_constraints(&self.tuning, self.bounds.min, self.bounds.max, p.radius, &mut p.pos, &mut p.pos_old); 
+        // }
     }
 }
           

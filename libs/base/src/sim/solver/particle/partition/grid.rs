@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::{AddAssign, Mul, Sub, SubAssign};
-use crate::math::{DVec2, DVec3, FloatScalar, IVec2, IVec3, Vector};
-use crate::sim::solver::partition::collision::{CollisionRegistry};
+use crate::math::{FloatScalar, IVec2, IVec3, QuantizeInto, Vector};
+use crate::sim::solver::particle::partition::collision::CollisionRegistry; 
 
-pub type UniformGrid2D = UniformGrid<IVec2, DVec2>;
-pub type UniformGrid3D = UniformGrid<IVec3, DVec3>;
+// pub type UniformGrid2D = UniformGrid<IVec2, DVec2>;
+// pub type UniformGrid3D = UniformGrid<IVec3, DVec3>;
 
 pub trait GridKey: Hash + Eq + Copy + std::ops::Add<Output = Self> + 'static { 
     const OFFSETS: &'static [Self];
@@ -56,14 +56,20 @@ impl GridCell {
     }
 }
 
-pub struct UniformGrid<K, V> {  
-    cell_size: f64,
-    cells: HashMap<K, GridCell>, 
+pub struct UniformGrid<V> 
+where
+    V: Vector,
+{  
+    pub cell_size: V::Scalar,   
+    pub cells: HashMap<V::Quantized, GridCell>, 
     _marker: std::marker::PhantomData<V>,
 }
- 
-impl<K: Hash + Eq, V> UniformGrid<K, V> {
-    pub fn new(cell_size: f64) -> Self {
+
+impl<V: Vector> UniformGrid<V> 
+where
+    V::Quantized: Hash + Eq,
+{
+    pub fn new(cell_size: V::Scalar) -> Self {
         Self {
             cell_size,
             cells: HashMap::new(),
@@ -71,26 +77,34 @@ impl<K: Hash + Eq, V> UniformGrid<K, V> {
         }
     }
 
-    pub fn set_cell_size(&mut self, cell_size: f64){
-        self.cell_size = cell_size * 1.1;
+    pub fn set_cell_size(&mut self, cell_size: V::Scalar) { 
+        let buffer_factor = <V::Scalar as FloatScalar>::from_f64(1.1);
+        self.cell_size = cell_size * buffer_factor;
     }
 
     pub fn clear(&mut self) {
         self.cells.clear();
     }
 
-    pub fn insert(&mut self, cell_key: K, index: usize) {
+    pub fn insert(&mut self, cell_key: V::Quantized, index: usize) {
         self.cells.entry(cell_key).or_default().indices.push(index);
     }
- 
+
+    pub fn populate(&mut self, positions: &[V]) {
+        self.clear();
+        for (index, &pos) in positions.iter().enumerate() {
+            // position calls your macro trait directly into its internal associated match
+            let cell_key = pos.quantize_into(self.cell_size);
+            self.insert(cell_key, index);
+        }
+    }
 }
 
-impl<K: GridKey, V> UniformGrid<K, V>
+impl<V: Vector> UniformGrid<V>
 where
-    V: Vector + Sub<Output = V> + AddAssign + SubAssign + Mul<V::Scalar, Output = V>,
-    V::Scalar: FloatScalar,
+    V::Quantized: GridKey + Hash + Eq,
 {
-   #[inline(always)]
+    #[inline(always)]
     fn check_and_append_collision(
         &self,
         idx_a: usize,
@@ -110,17 +124,20 @@ where
         }
     }
 
-   pub fn find_collisions(
+    pub fn find_collisions(
         &self,
         positions: &[V],
         radii: &[V::Scalar],
         registry: &mut CollisionRegistry<V>,
     ) {
+        // Grab the internal offsets defined by your quantized type's trait
+        type QKey<VecT> = <VecT as Vector>::Quantized;
+
         for (cell_key, cell) in &self.cells {
             let indices = &cell.indices;
             let len = indices.len();
 
-            // 1. INTRA-CELL
+            // 1. INTRA-CELL (Self-collisions within the same grid unit)
             if len >= 2 {
                 for i in 0..len.saturating_sub(1) {
                     for j in (i + 1)..len {
@@ -131,8 +148,8 @@ where
                 }
             }
 
-            // 2. NEIGHBOR-CELL
-            for &offset in K::OFFSETS {
+            // 2. NEIGHBOR-CELL (Querying surrounding boundaries)
+            for &offset in QKey::<V>::OFFSETS {
                 let neighbor_key = *cell_key + offset;
                 if let Some(neighbor_cell) = self.cells.get(&neighbor_key) {
                     for &idx_a in indices {
@@ -147,43 +164,11 @@ where
         }
     }
 }
-
-pub trait QuantizeInto<K> {
-    fn quantize_into(self, cell_size: f64) -> K;
-}
-
-impl QuantizeInto<IVec2> for DVec2 {
-    fn quantize_into(self, cell_size: f64) -> IVec2 {
-        IVec2::new(
-            (self.x / cell_size).floor() as i32,
-            (self.y / cell_size).floor() as i32,
-        )
-    }
-}
-
-impl QuantizeInto<IVec3> for DVec3 {
-    fn quantize_into(self, cell_size: f64) -> IVec3 {
-        IVec3::new(
-            (self.x / cell_size).floor() as i32,
-            (self.y / cell_size).floor() as i32,
-            (self.z / cell_size).floor() as i32,
-        )
-    }
-}
+ 
 
  
-impl<K: GridKey, V> UniformGrid<K, V>
-where
-    V: Copy + QuantizeInto<K>,
-{
-    pub fn populate(&mut self, positions: &[V]) {
-        self.clear();
-        for (index, &pos) in positions.iter().enumerate() {
-            let cell_key = pos.quantize_into(self.cell_size);
-            self.insert(cell_key, index);
-        }
-    }
-}
+ 
+
  
  
 

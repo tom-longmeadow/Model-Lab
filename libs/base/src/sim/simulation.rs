@@ -1,12 +1,15 @@
 use std::time::Instant;
-use crate::{math::Bounds, sim::{clock::Clock, lifecycle::Lifecycle, metrics::SimMetrics, solver::Solver, storage::Storage}};
+use crate::{sim::{clock::Clock, lifecycle::Lifecycle, metrics::SimMetrics, solver::Solver, storage::Storage}
+};
 
 pub trait Simulate {
-    type Storage: Storage;
+    type Storage: Storage; 
+    type Bounds; 
+
     fn simulate(&mut self, frame_time: f64);
     fn storage(&self) -> &Self::Storage;
-    fn metrics(&self) -> &SimMetrics;
-    fn set_bounds(&mut self, bounds: Bounds);
+    fn metrics(&self) -> &SimMetrics; 
+    fn set_bounds(&mut self, bounds: Self::Bounds);
 }
 
 /// Owns and coordinates the three components of a simulation.
@@ -23,7 +26,7 @@ where
     lifecycle: Lc,
     clock:     Clock,
     metrics:   SimMetrics,
-    bounds:    Bounds,
+    bounds:    Sv::Bounds, 
 }
 
 impl<St, Sv, Lc> Simulation<St, Sv, Lc>
@@ -34,27 +37,39 @@ where
 {
     /// Creates a new simulation running at `hz` ticks per second.
     /// Calls `lifecycle.init` and `solver.init`.
-    pub fn new(hz: f64, storage: St, solver: Sv, lifecycle: Lc, bounds: Bounds) -> Self {
-        let mut sim = Self { storage, solver, lifecycle, clock: Clock::new(hz), metrics: SimMetrics::default(), bounds };
+    pub fn new(hz: f64, storage: St, solver: Sv, lifecycle: Lc, bounds: Sv::Bounds) -> Self {
+        let mut sim = Self { 
+            storage, 
+            solver, 
+            lifecycle, 
+            clock: Clock::new(hz), 
+            metrics: SimMetrics::default(), 
+            bounds 
+        };
         sim.metrics.hz = hz;
         sim.solver.init(&mut sim.storage);
         sim
     }
  
     /// Read access to the clock — for alpha, elapsed time, tick count.
-    pub fn clock(&self) -> &Clock { &self.clock }
+    pub fn clock(&self) -> &Clock { 
+        &self.clock 
+    }
 
     /// Read access to simulation spatial bounds.
-    pub fn bounds(&self) -> &Bounds { &self.bounds }
+    pub fn bounds(&self) -> &Sv::Bounds { 
+        &self.bounds 
+    }
 }
 
 impl<St, Sv, Lc> Simulate for Simulation<St, Sv, Lc>
 where
     St: Storage,
     Sv: Solver<St>,
-    Lc: Lifecycle<St>,
+    Lc: Lifecycle<St, Bounds = Sv::Bounds>
 {
     type Storage = St;
+    type Bounds = Sv::Bounds;  
 
     /// Advances the simulation by `frame_time` seconds of real-world time.
     /// May run zero, one, or many ticks depending on the accumulator.
@@ -96,50 +111,7 @@ where
             0.0
         }; 
     }
-
-    // fn simulate(&mut self, frame_time: f64) {
-    //     let tick  = self.clock.tick();
-    //     let steps = self.clock.advance(frame_time);
-    //     let subs  = self.solver.substep_count().max(1);
-
-    //     let step_dt = self.clock.fixed_dt();
-    //     let sub_dt  = step_dt / subs as f64;
-
-    //     let mut total_step_ns: u128 = 0;
-    //     let storage_size: usize = self.storage.len();
-    //     // let mut total_sub_ns:  u128 = 0;
-    //     // let mut sub_count:     usize = 0;
-
-    //     for step in 0..steps {
-    //         let current_tick = tick + step as u64;
-    //         let step_start = Instant::now();
-
-    //         self.storage.pre_step();
-    //         self.lifecycle.tick(&mut self.storage, current_tick, &self.bounds);
-
-    //         self.solver.pre_step(&mut self.storage, step_dt, current_tick, &self.bounds);
-    //         for _ in 0..subs { 
-    //             self.solver.sub_step(&mut self.storage, sub_dt); 
-    //         }
-    //         self.solver.post_step(&mut self.storage, step_dt);
-
-    //         self.storage.post_step();
-    //         total_step_ns += step_start.elapsed().as_nanos();
-    //     }
-
-    //     self.metrics.storage_size = storage_size;
-    //     //self.metrics.steps_per_frame  = steps;
-    //     self.metrics.total_ticks      = self.clock.tick();
-    //     self.metrics.accumulator_ms   = self.clock.accumulator() * 1000.0;
-    //     self.metrics.step_time_ms     = if steps > 0 {
-    //         (total_step_ns as f64 / steps as f64) / 1_000_000.0
-    //     } else { 0.0 };
-    //     // self.metrics.substep_time_ms  = if sub_count > 0 {
-    //     //     (total_sub_ns as f64 / sub_count as f64) / 1_000_000.0
-    //     // } else { 0.0 };
-    // }
-
-
+    
     fn storage(&self) -> &Self::Storage {
         &self.storage
     }
@@ -148,7 +120,7 @@ where
         &self.metrics
     }
 
-    fn set_bounds(&mut self, bounds: Bounds) {
+    fn set_bounds(&mut self, bounds: Self::Bounds) {
         self.bounds = bounds;
     }
 }
@@ -160,10 +132,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sim::{
+    use crate::{aabb::AABB, math::Vec2, sim::{
         lifecycle::Lifecycle,
         storage::{AosCpuStorage, CpuStorage, Storage},
-    };
+    }};
 
     // --- mock entity ---
     #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -257,11 +229,15 @@ mod tests {
     where
         S: Storage + AosCpuStorage<Item = MockEntity>,
     {
+        // Fix: Explicitly declare the boundary type this solver uses
+        type Bounds = AABB<Vec2>;
+
         fn substep_count(&self) -> u64 {
             self.iteration_count
         }
 
-        fn pre_step(&mut self, storage: &mut S, _: f64, tick: u64, _bounds: &Bounds) {
+        // Fix: Update the argument type from a raw `&AABB` to `&Self::Bounds`
+        fn pre_step(&mut self, storage: &mut S, _: f64, tick: u64, _bounds: &Self::Bounds) {
             self.calls.push_str("prepare-");
             self.received_ticks.push(tick);
             storage.push(setup_entity1());
@@ -277,22 +253,34 @@ mod tests {
         }
     }
 
-    // --- mock lifecycle ---
-    pub struct MockLifecycle;
-    impl<S> Lifecycle<S> for MockLifecycle where S: Storage {
-        fn tick(&mut self, _storage: &mut S, _tick: u64, _bounds: &Bounds) {
-            // dont do anything
+   
+   pub struct MockLifecycle;  
+    impl<S> Lifecycle<S> for MockLifecycle 
+    where 
+        S: Storage 
+    {
+        // 1. Explicitly satisfy the missing associated type requirement
+        type Bounds = AABB<Vec2>;
+
+        // 2. Update the argument to use Self::Bounds (or your concrete AABB<Vec2> type)
+        fn tick(&mut self, _storage: &mut S, _tick: u64, _bounds: &Self::Bounds) {
+            // don't do anything
         }
     }
 
-    // --- helpers ---
+    // --- Helpers ---
     fn setup_sim() -> Simulation<MockStorage, MockSolver, MockLifecycle> {
+        // Build the explicit spatial structures for the test environment
+        let min_corner = Vec2::new(0.0, 0.0);
+        let max_corner = Vec2::new(1000.0, 1000.0);
+        let test_bounds = AABB::new(min_corner, max_corner);
+
         Simulation::new(
             100.0,
             MockStorage::new(10),
             MockSolver::new(),
             MockLifecycle,
-            Bounds::new_2d((0.0,1000.0), (0.0,1000.0))
+            test_bounds
         )
     }
 

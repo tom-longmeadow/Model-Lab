@@ -1,11 +1,6 @@
-pub mod partition;
-pub mod verlet;
-pub mod tuning;
-pub mod constraint;
-pub mod solver_2d;
+pub mod particle; 
 
-
-use crate::{math::Bounds, sim::storage::Storage};
+use crate::{sim::storage::Storage};
 
  
 /// Loop contract only. No physics assumptions. No layout assumptions.
@@ -14,9 +9,11 @@ use crate::{math::Bounds, sim::storage::Storage};
 /// Fully monomorphized — `Simulation<St, Sv, Cr>` is a concrete type per configuration.
 /// For side-by-side comparison, instantiate two concrete `Simulation` values.
 pub trait Solver<S: Storage> {
+    type Bounds;
+
     fn init(&mut self,      _storage: &mut S) {}
     fn substep_count(&self) -> u64 { 1 }
-    fn pre_step(&mut self,  _storage: &mut S, _dt: f64, _tick: u64, _bounds: &Bounds) {}
+    fn pre_step(&mut self,  _storage: &mut S, _dt: f64, _tick: u64, _bounds: &Self::Bounds) {}
     fn sub_step(&mut self,   storage: &mut S,  dt: f64);
     fn post_step(&mut self, _storage: &mut S, _dt: f64) {}
 }
