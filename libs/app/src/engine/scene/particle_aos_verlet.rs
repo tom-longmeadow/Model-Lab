@@ -50,7 +50,7 @@ where
 
         let gravity                    = V::from_f64_array([0.0, -1600.0]);
         let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
-        let particle_relative_location = V::from_f64_array([0.05, 0.95]);
+        let particle_relative_location = V::from_f64_array([0.2, 0.97]);
 
         let lifecycle_start_tick: u64 = 50;
         let lifecycle_ticks_per_spawn: u64 = 3;   

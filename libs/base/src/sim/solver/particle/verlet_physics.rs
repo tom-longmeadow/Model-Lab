@@ -1,8 +1,3 @@
-
-// =========================================================================
-// 2. VERLET SOLVER IMPLEMENTATION
-// =========================================================================
-
 use crate::{math::{FloatScalar, Vector, VectorMask}, sim::solver::particle::{partition::collision::CollisionRegistry, tuning::ParticlePhysicsTuning}};
  
 pub struct VerletPhysics; 
@@ -58,57 +53,177 @@ impl VerletPhysics {
     //     *pos = pos.max(min_allowed).min(max_allowed);
     // }
 
-    #[inline(always)]
-    pub fn apply_position_constraints<V>(
-        dt: V::Scalar,
-        tuning: &ParticlePhysicsTuning<V::Scalar>,
-        min_bound: V,
-        max_bound: V,
-        radius: V::Scalar,
-        pos: &mut V,
-        pos_old: &mut V,
-    ) where 
-        V: Vector
-    {
-        // 1. Calculate implicit frame displacement (already scaled by dt implicitly)
-        let vel = *pos - *pos_old;
+    // #[inline(always)]
+    // pub fn apply_position_constraints<V>(
+    //     dt: V::Scalar,
+    //     tuning: &ParticlePhysicsTuning<V::Scalar>,
+    //     min_bound: V,
+    //     max_bound: V,
+    //     radius: V::Scalar,
+    //     pos: &mut V,
+    //     pos_old: &mut V,
+    // ) where 
+    //     V: Vector
+    // {
+    //     // 1. Calculate implicit frame displacement (already scaled by dt implicitly)
+    //     let vel = *pos - *pos_old;
 
-        // 2. Expand radius and set limits
-        let r = V::splat(radius);
-        let min_collision_limit = min_bound + r;
-        let max_collision_limit = max_bound - r;
+    //     // 2. Expand radius and set limits
+    //     let r = V::splat(radius);
+    //     let min_collision_limit = min_bound + r;
+    //     let max_collision_limit = max_bound - r;
 
-        // 3. Generate component-wise collision masks
-        let under_min_mask = pos.cmplt(min_collision_limit);
-        let over_max_mask = pos.cmpgt(max_collision_limit);
-        let collision_mask = V::mask_or(under_min_mask, over_max_mask);
+    //     // 3. Generate component-wise collision masks
+    //     let under_min_mask = pos.cmplt(min_collision_limit);
+    //     let over_max_mask = pos.cmpgt(max_collision_limit);
+    //     let collision_mask = V::mask_or(under_min_mask, over_max_mask);
 
-        // 4. Correct positions immediately to prevent gluing to walls
-        let mut new_pos = *pos;
-        new_pos = V::select(under_min_mask, min_collision_limit, new_pos);
-        new_pos = V::select(over_max_mask, max_collision_limit, new_pos);
+    //     // 4. Correct positions immediately to prevent gluing to walls
+    //     let mut new_pos = *pos;
+    //     new_pos = V::select(under_min_mask, min_collision_limit, new_pos);
+    //     new_pos = V::select(over_max_mask, max_collision_limit, new_pos);
 
-        // 5. Clean bounce: Restitution is a ratio (0.0 to 1.0). Do NOT multiply by dt here!
-        let bounced_vel_normal = (-vel) * tuning.restitution;
+    //     // 5. Clean bounce: Restitution is a ratio (0.0 to 1.0). Do NOT multiply by dt here!
+    //     let bounced_vel_normal = (-vel) * tuning.restitution;
 
-        // 6. Clean friction: Dampen non-colliding components securely
-        let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
-        let slowed_vel_tangential = vel * friction_diminish;
+    //     // 6. Clean friction: Dampen non-colliding components securely
+    //     let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
+    //     let slowed_vel_tangential = vel * friction_diminish;
 
-        // 7. Use SIMD selection to route velocity values axis-by-axis
-        let new_vel = V::select(collision_mask, bounced_vel_normal, slowed_vel_tangential);
+    //     // 7. Use SIMD selection to route velocity values axis-by-axis
+    //     let new_vel = V::select(collision_mask, bounced_vel_normal, slowed_vel_tangential);
 
-        // 8. Reconstruct Verlet history so next frame inherits the outward momentum
-        *pos = new_pos;
-        *pos_old = new_pos - new_vel;
-    }
+    //     // 8. Reconstruct Verlet history so next frame inherits the outward momentum
+    //     *pos = new_pos;
+    //     *pos_old = new_pos - new_vel;
+    // }
 
      
     
     
    
- 
+// #[inline(always)] 
+// pub fn apply_position_constraints<V>(
+//     dt: V::Scalar,
+//     tuning: &ParticlePhysicsTuning<V::Scalar>,
+//     min_bound: V,
+//     max_bound: V,
+//     radius: V::Scalar,
+//     pos: &mut V,
+//     pos_old: &mut V,
+// ) where 
+//     V: Vector
+// {
+//     let vel = *pos - *pos_old;
+
+//     let r = V::splat(radius);
+//     let min_collision_limit = min_bound + r;
+//     let max_collision_limit = max_bound - r;
+
+//     let under_min_mask = pos.cmplt(min_collision_limit);
+//     let over_max_mask = pos.cmpgt(max_collision_limit);
+//     let collision_mask = V::mask_or(under_min_mask, over_max_mask);
+
+//     if collision_mask.any() {
+//         // 1. Correct positions immediately to prevent wall-penetration
+//         let mut new_pos = *pos;
+//         new_pos = V::select(under_min_mask, min_collision_limit, new_pos);
+//         new_pos = V::select(over_max_mask, max_collision_limit, new_pos);
+
+//         // 2. Load the central frame-based jitter vector
+//         let base_noise = V::from_f64_array(tuning.runtime_jitter);
+        
+//         // 3. Separate raw bounce (normal) and standard sliding dampening (tangential)
+//         let bounced_vel_normal = (-vel) * tuning.restitution;
+//         let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
+//         let slowed_vel_tangential = vel * friction_diminish;
+
+//         // 4. ACTIVE SLIDE DETECTION & JITTER INJECTION
+//         // We create an axis-inverted jitter multiplier. 
+//         // If Axis X is hitting a wall, we want to inject jitter into Axis Y/Z to slide it sideways.
+//         // We do this by swapping or combining the noise elements element-wise.
+//         let one_with_noise = V::splat(V::Scalar::ONE) + base_noise;
+        
+//         // Apply jitter directly to both velocity pathways
+//         let jittered_bounced_vel = bounced_vel_normal.mul_elementwise(one_with_noise);
+        
+//         // This line introduces a constant shuffling force along the wall even if 'vel' approaches zero,
+//         // which prevents columns of particles from stabilizing against boundaries.
+//         let jittered_tangential_vel = slowed_vel_tangential + base_noise * dt;
+
+//         // 5. Select axis routes based on SIMD collision state
+//         // Colliding axes get the inverted bounce reaction.
+//         // Non-colliding axes get the jittered tangential/sliding velocity.
+//         let new_vel = V::select(collision_mask, jittered_bounced_vel, jittered_tangential_vel);
+
+//         *pos = new_pos;
+//         *pos_old = new_pos - new_vel;
+//     } else {
+//         // OPEN AIR PATH: Zero noise calculations, completely pure execution branch
+//         let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
+//         let clean_slowed_vel_tangential = vel * friction_diminish;
+        
+//         *pos_old = *pos - clean_slowed_vel_tangential;
+//     }
+// }
      
+
+     #[inline(always)] 
+pub fn apply_position_constraints<V>(
+    dt: V::Scalar,
+    tuning: &ParticlePhysicsTuning<V::Scalar>,
+    min_bound: V,
+    max_bound: V,
+    radius: V::Scalar,
+    pos: &mut V,
+    pos_old: &mut V,
+) where 
+    V: Vector
+{
+    let vel = *pos - *pos_old;
+
+    let r = V::splat(radius);
+    let min_collision_limit = min_bound + r;
+    let max_collision_limit = max_bound - r;
+
+    let under_min_mask = pos.cmplt(min_collision_limit);
+    let over_max_mask = pos.cmpgt(max_collision_limit);
+    let collision_mask = V::mask_or(under_min_mask, over_max_mask);
+
+    if collision_mask.any() {
+        // 1. Correct positions immediately to prevent wall-penetration
+        let mut new_pos = *pos;
+        new_pos = V::select(under_min_mask, min_collision_limit, new_pos);
+        new_pos = V::select(over_max_mask, max_collision_limit, new_pos);
+
+        // 2. Load the central frame-based jitter vector
+        let base_noise = V::from_f64_array(tuning.runtime_jitter);
+        
+        // 3. Separate clean raw bounce (normal) and standard sliding dampening (tangential)
+        let clean_bounced_vel_normal = (-vel) * tuning.restitution;
+        let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
+        let slowed_vel_tangential = vel * friction_diminish;
+
+        // 4. ACTIVE SLIDE JITTER INJECTION
+        // Introduce a constant shuffling force along the wall components.
+        // This keeps particles fluidly moving sideways out of rigid stacks, even at rest.
+        let jittered_tangential_vel = slowed_vel_tangential + base_noise * dt;
+
+        // 5. Select axis routes based on SIMD collision state
+        // - Colliding axes get the clean, un-jittered perpendicular reflection normal.
+        // - Non-colliding axes get the jittered tangential/sliding velocity.
+        let new_vel = V::select(collision_mask, clean_bounced_vel_normal, jittered_tangential_vel);
+
+        *pos = new_pos;
+        *pos_old = new_pos - new_vel;
+    } else {
+        // OPEN AIR PATH: Zero noise calculations, completely pure execution branch
+        let friction_diminish = V::Scalar::ONE - (dt * tuning.friction);
+        let clean_slowed_vel_tangential = vel * friction_diminish;
+        
+        *pos_old = *pos - clean_slowed_vel_tangential;
+    }
+}
 
     /// Generic collision detector pushing cleanly to the abstract spatial registry.
     pub fn detect_collisions<V>(
@@ -207,13 +322,11 @@ pub fn resolve_particle_collisions<V>(
     let mut dist_sq = delta.length_squared();
 
     // --- CATCH FUSED PARTICLES ---
-    // If they are exactly concentric, create an artificial horizontal separation vector
-    // so they do not get skipped and locked together permanently.
+    // Zero heap allocations. Use your fast from_f64_array to inject a tiny separation offset.
     if dist_sq == V::Scalar::ZERO {
-        // Construct a tiny dummy displacement along the X-axis (assuming first dimension)
-        let mut slice = vec![V::Scalar::ZERO; V::DIM];
-        slice[0] = V::Scalar::from_f64(0.0001);
-        delta = V::from_slice(&slice);
+        let mut sep_arr = [0.0; 4];
+        sep_arr[0] = 0.0001; // Tiny displacement along the X-axis
+        delta = V::from_f64_array(sep_arr);
         dist_sq = delta.length_squared();
     }
 
@@ -224,22 +337,19 @@ pub fn resolve_particle_collisions<V>(
         if raw_penetration > tuning.penetration_slop {
             let penetration = raw_penetration - tuning.penetration_slop;
             
-            // --- INJECT JITTER TO THE NORMAL ---
             // Calculate a raw normal direction
             let mut normal = delta / dist;
 
-            // Generate a tiny, deterministic jitter factor using a mathematical hash of the positions.
-            // This breaks the perfect symmetry of vertical columns without requiring an external RNG.
-            let hash = (pos_a.dot(*pos_a) + pos_b.dot(*pos_b)).to_f64();
-            let jitter_amount = 0.01; // 1% variance is enough to destabilize a stack
-            let sign = if hash.sin() > 0.0 { 1.0 } else { -1.0 };
+            // --- UNIFIED HIGH-PERFORMANCE JITTER ---
+            // Load the pre-calculated frame jitter directly into registers.
+            let base_jitter = V::from_f64_array(tuning.runtime_jitter);
             
-            // Create a small horizontal perturbation vector
-            let mut jitter_slice = vec![V::Scalar::ZERO; V::DIM];
-            jitter_slice[0] = V::Scalar::from_f64(sign * jitter_amount);
-            let jitter_vec = V::from_slice(&jitter_slice);
+            // Mix the noise with the collision normal to randomize the perturbation direction.
+            // This ensures particles crashing from different angles get unique sideways shuffles,
+            // destroying vertical stacking grids with zero branch or trigonometry overhead.
+            let jitter_vec = normal.mul_elementwise(base_jitter);
 
-            // Add the jitter to the normal and re-normalize to maintain vector integrity
+            // Perturb the normal and re-normalize to maintain vector unit length integrity
             normal = normal + jitter_vec;
             let normal_len_sq = normal.length_squared();
             if normal_len_sq > V::Scalar::ZERO {

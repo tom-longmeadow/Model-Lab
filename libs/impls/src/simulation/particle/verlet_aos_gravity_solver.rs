@@ -79,6 +79,7 @@ where
     fn pre_step(&mut self, storage: &mut AosVecStorage<V>, _dt: f64, _tick: u64, bounds: &AABB<V>) {
 
 
+        self.tuning.update_jitter(_tick);
         if storage.len() != self.scratch_radii.len() {
             self.scratch_radii.clear();
 

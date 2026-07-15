@@ -123,6 +123,7 @@ pub trait FloatScalar:
     fn from_f64(v: f64) -> Self;
     fn to_f64(self) -> f64;  
     fn abs(self) -> Self;
+    fn sin(self) -> Self; 
 }
 
  
@@ -144,6 +145,12 @@ macro_rules! impl_float_scalar {
                 <$scalar_type>::exp(self) 
             }
 
+            // Updated: Maps seamlessly to f32::sin and f64::sin intrinsics
+            #[inline] 
+            fn sin(self) -> Self { 
+                <$scalar_type>::sin(self) 
+            }
+
             #[inline] 
             fn from_f64(v: f64) -> Self { 
                 v as $scalar_type 
@@ -161,6 +168,7 @@ macro_rules! impl_float_scalar {
         }
     };
 }
+
 
  
 pub trait Vector: 
@@ -191,6 +199,7 @@ pub trait Vector:
     fn max(self, other: Self) -> Self;
     fn div_elementwise(self, other: Self) -> Self;
     fn mul_elementwise(self, other: Self) -> Self;
+    fn sin_elementwise(self) -> Self;
 
     fn length_squared(self) -> Self::Scalar;
     fn length(self) -> Self::Scalar;
@@ -217,11 +226,7 @@ pub trait Vector:
  
     
 }
-
-// ==========================================
-// 4. Automated Macro Engine (Using Your Aliases)
-// ==========================================
-
+ 
 macro_rules! impl_vector_for_alias {
     ($vector_type:ty, $dim:expr, $scalar:ty, $native_mask:ty, $target_mask:ty, $quantized_type:ty) => {
         impl Vector for $vector_type {
@@ -238,12 +243,15 @@ macro_rules! impl_vector_for_alias {
             #[inline] fn div_elementwise(self, other: Self) -> Self { self / other }
             #[inline] fn mul_elementwise(self, other: Self) -> Self { self * other }
 
-             #[inline] 
+             
+            
+
+            #[inline] 
             fn from_slice(slice: &[Self::Scalar]) -> Self { 
                 <$vector_type>::from_slice(slice) 
             }
 
-             #[inline]
+            #[inline]
             fn from_f64_array<const N: usize>(arr: [f64; N]) -> Self {
                 let mut components = [<$scalar as FloatScalar>::ZERO; $dim];
                 let limit = if N < $dim { N } else { $dim };
@@ -253,7 +261,23 @@ macro_rules! impl_vector_for_alias {
                 <$vector_type>::from_slice(&components)
             }
 
-             /// Calculates the squared length of the vector. 
+            #[inline]
+            fn sin_elementwise(self) -> Self {
+                let mut final_components = [<$scalar as FloatScalar>::ZERO; $dim];
+                
+                // Direct, zero-overhead conversion to a raw slice view
+                let slice_view = unsafe { 
+                    std::slice::from_raw_parts(&self as *const Self as *const $scalar, $dim) 
+                };
+                
+                for i in 0..$dim {
+                    final_components[i] = slice_view[i].sin();
+                }
+                
+                <$vector_type>::from_slice(&final_components)
+            }
+
+            /// Calculates the squared length of the vector. 
             /// Fast because it avoids a square root operation.
             #[inline]
             fn length_squared(self) -> Self::Scalar {
@@ -266,19 +290,6 @@ macro_rules! impl_vector_for_alias {
             fn length(self) -> Self::Scalar {
                 self.length_squared().sqrt()
             }
-            
-            // #[inline] fn cmpeq(self, other: Self) -> Self::Mask { 
-            //     let native: $native_mask = <$vector_type>::cmpeq(self, other);
-            //     // Fully qualified trait calls fix ambiguous method resolutions
-            //     let arr = <$native_mask as VectorMask>::to_array(native);
-            //     <Self::Mask as VectorMask>::from_array(arr)
-            // }
-            
-            // #[inline] fn cmpneq(self, other: Self) -> Self::Mask { 
-            //     let native: $native_mask = <$vector_type>::cmpneq(self, other);
-            //     let arr = <$native_mask as VectorMask>::to_array(native);
-            //     <Self::Mask as VectorMask>::from_array(arr)
-            // }
             
             #[inline] fn cmplt(self, other: Self) -> Self::Mask { 
                 let native: $native_mask = <$vector_type>::cmplt(self, other);
@@ -311,16 +322,13 @@ macro_rules! impl_vector_for_alias {
                 let l_arr = <Self::Mask as VectorMask>::to_array(lhs);
                 let r_arr = <Self::Mask as VectorMask>::to_array(rhs);
                 let native_l = <$native_mask as VectorMask>::from_array(l_arr);
-                let native_r = <$native_mask>::from_array(r_arr); // directly works or qualify
+                let native_r = <$native_mask>::from_array(r_arr);
                 let combined = native_l | native_r;
                 <Self::Mask as VectorMask>::from_array(<$native_mask as VectorMask>::to_array(combined))
             }
         }
     };
 }
-
- 
-
  
 impl_float_scalar!(f32);
 impl_float_scalar!(f64);

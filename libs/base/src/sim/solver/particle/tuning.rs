@@ -16,7 +16,9 @@ pub struct ParticlePhysicsTuning<S: FloatScalar> {
     /// Surface friction
     pub friction: S,  
     /// Velocity cap to prevent tunneling
-    pub max_velocity: S,               
+    pub max_velocity: S,     
+    // Add a pre-mixed vector state that your engine updates once per frame
+    pub runtime_jitter: [f64; 4], // Large enough array to cover any vector dimension          
 }
 
 impl<S: FloatScalar> ParticlePhysicsTuning<S> { 
@@ -46,6 +48,7 @@ impl<S: FloatScalar> ParticlePhysicsTuning<S> {
         let friction_constant = S::from_f64(0.3);
         let target_frame_bias = S::from_f64(0.4);  
         let max_velocity = radius_max * S::from_f64(600.0);  
+        let runtime_jitter: [f64; 4] = [0.0; 4];
 
         Self {
             restitution,
@@ -55,8 +58,27 @@ impl<S: FloatScalar> ParticlePhysicsTuning<S> {
             global_damping: global_damping_constant,
             friction: friction_constant, 
             max_velocity,
+            runtime_jitter
         }
     }
+
+    /// Call this once per frame before processing particle constraints.
+    /// It uses a golden ratio multiplier to cycle the seed chaotically.
+    pub fn update_jitter(&mut self, frame_count: u64) {
+        // High-frequency constants to break up numerical alignment
+        let seed = frame_count.wrapping_add(0x9E3779B97F4A7C15);
+        
+        // Generate 4 highly unaligned pseudo-random values
+        for i in 0..4 {
+            let mut x = seed.wrapping_add(i as u64).wrapping_mul(0xBF58476D1CE4E5B9);
+            x = (x ^ (x >> 30)).wrapping_mul(0x94D049BB133111EB);
+            x = (x ^ (x >> 27)).wrapping_mul(0x7305754198654329);
+            let raw_float = (x ^ (x >> 31)) as f64 / u64::MAX as f64; // Maps to [0.0, 1.0]
+             
+            self.runtime_jitter[i] = (raw_float * 0.02) - 0.01;
+        }
+    }
+
 }
 
 impl<S: FloatScalar> Default for ParticlePhysicsTuning<S> {
