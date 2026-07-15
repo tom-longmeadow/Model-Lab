@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash; 
 use crate::math::{FloatScalar, IVec2, IVec3,  Vector};
-use crate::sim::solver::particle::partition::collision::CollisionRegistry; 
+use crate::sim::solver::particle::space::collision::CollisionRegistry; 
 
 // pub type UniformGrid2D = UniformGrid<IVec2, DVec2>;
 // pub type UniformGrid3D = UniformGrid<IVec3, DVec3>;

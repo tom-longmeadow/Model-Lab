@@ -223,7 +223,12 @@ pub trait Vector:
         let out_max = self.cmpgt(max_bound);
         !Self::mask_or(out_min, out_max).any()
     }
- 
+     /// Normalizes the vector. Panics if the vector length is zero.
+    #[inline]
+    fn normalize(self) -> Self {
+        let len = self.length();
+        self / len
+    } 
     
 }
  

@@ -1,30 +1,9 @@
 use std::sync::{Arc, Mutex};
-use base::{aabb::AABB, math::{Vector}, sim::simulation::Simulate};
+use base::{aabb::AABB, math::Vector, sim::{simulation::Simulate, solver::particle::{environment::ParticleEnvironment, 
+    verlet_aos_vec_storage::VerletParticleAosVecStorage}}};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer}};
 
 
- 
-
-
-/// Strategy for handling window resize events in relation to simulation bounds.
-//#[derive(Debug, Clone, Copy)]
-// pub enum ResizeStrategy {
-//     /// Simulation units are pixels. Window size determines world size.
-//     /// Particle radius in pixels stays constant visual size regardless of window size.
-//     /// Like a marble in a box - resize window = resize box, marble stays same size.
-//     Dynamic,
-// }
-
-/// A render pass that owns a simulation and a renderer, driving both each frame.
-///
-/// `SimulationPass` is layout-agnostic — it does not know or care whether the
-/// simulation uses AoS, SoA, or a GPU-native layout. That is entirely the
-/// renderer's responsibility, expressed through `SimulationRenderer::sync`.
-///
-/// On each frame `update()`:
-///   1. Advances the simulation by `dt` seconds
-///   2. Calls `renderer.sync(storage)` — renderer extracts what it needs
-///   3. Calls `renderer.update(...)` — renderer uploads to GPU
 pub struct SimulationPass<S, R>
 where
     S: Simulate,
@@ -52,47 +31,27 @@ where
     pub fn with_hud(mut self, hud: Arc<Mutex<HudState>>) -> Self {
         self.hud = Some(hud);
         self
-    }
-
-    // /// Set the resize strategy for this simulation pass.
-    // pub fn with_strategy(mut self, strategy: ResizeStrategy) -> Self {
-    //     self.strategy = strategy;
-    //     self
-    // }
-
-    // /// Calculate transform based on current strategy and surface config.
-    // fn calculate_transform(&self, _config: &wgpu::SurfaceConfiguration) -> Transform {
-    //     match self.strategy {
-    //         ResizeStrategy::Dynamic => {
-    //             // Simulation units are pixels. Map sim bounds to full NDC range.
-    //             // Since bounds match window dimensions, this gives 1 sim unit = 1 pixel.
-    //             Transform::from_bounds(
-    //                 self.sim_bounds.min.x, self.sim_bounds.max.x,
-    //                 self.sim_bounds.min.y, self.sim_bounds.max.y,
-    //                 -1.0, 1.0,
-    //                 -1.0, 1.0,
-    //             )
-    //         }
-    //     }
-    // }
+    } 
 }
 
 impl<S, R, V> Pass for SimulationPass<S, R>
-where
-    S: Simulate<Bounds = AABB<V>> + 'static, // Constrain bounds to AABB of some Vector type V
-    V: Vector + From<(f64, f64)>,            // V must know how to ingest the 2D window size
-    R: SimulationRenderer<S::Storage> + 'static,
+where  
+    S: Simulate<
+        Storage = VerletParticleAosVecStorage<V>, 
+        Environment = ParticleEnvironment<V>
+    > + 'static,   
+    V: Vector + From<(f64, f64)>,  
+    R: SimulationRenderer<VerletParticleAosVecStorage<V>> + 'static,
 {
     fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
-         
         let max_pos = V::from((config.width as f64, config.height as f64));
         let min_pos = V::ZERO;  
-        let new_bounds = AABB::new(min_pos, max_pos);
-             
-        self.simulation.set_bounds(new_bounds); 
-        self.renderer.prepare(device, queue, config);
+        let new_bounds = AABB::new(min_pos, max_pos); 
+
+        let env = self.simulation.environment();  
+        env.space.bounds = new_bounds;  
         
-       
+        self.renderer.prepare(device, queue, config);
     }
 
     fn update(&mut self, frame_time: f64, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {

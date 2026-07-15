@@ -10,10 +10,7 @@ pub struct AABB<V> {
 impl<V: Vector> Default for AABB<V> {
     #[inline]
     fn default() -> Self {
-        Self {
-            min: V::ZERO,
-            max: V::ZERO,
-        }
+        Self::zero()
     }
 }
 
@@ -23,6 +20,13 @@ where
 {
     pub fn new(min: V, max: V) -> Self {
         Self { min, max }
+    }
+
+    pub fn zero() -> Self {
+        Self {
+            min: V::ZERO,
+            max: V::ZERO,
+        }
     }
 
     pub fn from_insets(other: &Self, insets: &Insets<V>) -> Self {
