@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
-use base::{aabb::AABB, math::Vector, sim::{simulation::Simulate, solver::particle::{environment::ParticleEnvironment, 
-    verlet_aos_vec_storage::VerletParticleAosVecStorage}}};
+use base::{aabb::AABB, math::Vector, sim::{simulation::Simulate, solver::particle::{environment::ParticleEnvironment}}};
 use crate::graphics_context::{pass::{Pass, hud::HudState}, simulation::{renderer::SimulationRenderer}};
+
 
 
 pub struct SimulationPass<S, R>
@@ -34,14 +34,13 @@ where
     } 
 }
 
+// STRATEGY: Remove the explicit Aos Vec Storage hardcoding from the trait block bounds.
+// By making S::Storage generic, this pass works natively for both AoS and SoA backends.
 impl<S, R, V> Pass for SimulationPass<S, R>
 where  
-    S: Simulate<
-        Storage = VerletParticleAosVecStorage<V>, 
-        Environment = ParticleEnvironment<V>
-    > + 'static,   
-    V: Vector + From<(f64, f64)>,  
-    R: SimulationRenderer<VerletParticleAosVecStorage<V>> + 'static,
+    S: Simulate<Environment = ParticleEnvironment<V>> + 'static,   
+    V: Vector + From<(f64, f64)> + 'static,  
+    R: SimulationRenderer<S::Storage> + 'static,
 {
     fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &wgpu::SurfaceConfiguration) {
         let max_pos = V::from((config.width as f64, config.height as f64));
@@ -61,16 +60,14 @@ where
             if let Ok(mut s) = hud.try_lock() {
                 let m = self.simulation.metrics();
                 
-                s.set("FPS",format!("{:.0}", if frame_time > 0.0 { 1.0 / frame_time } else { 0.0 }));
-                s.set("",    "");
+                s.set("FPS", format!("{:.0}", if frame_time > 0.0 { 1.0 / frame_time } else { 0.0 }));
+                s.set("", "");
                 s.set("Particles", format!("{:.0}", m.storage_size));
-                s.set("hz", format!("{:.0}",       m.hz));
-                s.set("Max step",        format!("{:.3} ms",    1.0 / m.hz * 1000.0));
-                s.set("Step time",       format!("{:.3} ms",    m.step_time_ms));
-                // s.set("Steps/f",   format!("{}",          m.steps_per_frame)); 
-                // s.set("Substep",   format!("{:.3} ms",    m.substep_time_ms));
-                s.set("Accum",     format!("{:.2} ms",    m.accumulator_ms));
-                s.set("Ticks",     format!("{}",          m.total_ticks));
+                s.set("hz", format!("{:.0}", m.hz));
+                s.set("Max step", format!("{:.3} ms", 1.0 / m.hz * 1000.0));
+                s.set("Step time", format!("{:.3} ms", m.step_time_ms));
+                s.set("Accum", format!("{:.2} ms", m.accumulator_ms));
+                s.set("Ticks", format!("{}", m.total_ticks));
             }
         }
 
@@ -82,4 +79,3 @@ where
         self.renderer.draw(pass);
     }
 }
- 

@@ -274,9 +274,16 @@ impl<I: 'static> Renderer for AosSimulationRenderer<I> {
         
         // NEW: Attach your aspect ratio buffer to slot group index 0
         pass.set_bind_group(0, self.aspect_bind_group.as_ref().unwrap(), &[]);
+
+        let pos_buf = match &self.unit_quad_buffer { Some(b) => b, None => return };
+        let inx_buf = match &self.instance_buffer { Some(b) => b, None => return };
+ 
+
+        pass.set_vertex_buffer(0, pos_buf.slice(..));
+        pass.set_vertex_buffer(1, inx_buf.slice(..));
         
-        pass.set_vertex_buffer(0, self.unit_quad_buffer.as_ref().unwrap().slice(..));
-        pass.set_vertex_buffer(1, self.instance_buffer.as_ref().unwrap().slice(..));
+        // pass.set_vertex_buffer(0, self.unit_quad_buffer.as_ref().unwrap().slice(..));
+        // pass.set_vertex_buffer(1, self.instance_buffer.as_ref().unwrap().slice(..));
         pass.draw(0..6, 0..self.instance_count); 
     }
 }

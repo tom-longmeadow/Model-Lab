@@ -81,6 +81,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aos_verlet_ball_bounce"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
+]
+
+[[package]]
 name = "app"
 version = "0.1.0"
 dependencies = [
@@ -133,19 +146,6 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
-
-[[package]]
-name = "ball_bounce"
-version = "0.1.0"
-dependencies = [
- "app",
- "base",
- "pollster",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "winit",
-]
 
 [[package]]
 name = "base"
@@ -1863,6 +1863,19 @@ name = "smol_str"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aaa7368fcf4852a4c2dd92df0cace6a71f2091ca0a23391ce7f3a31833f1523"
+
+[[package]]
+name = "soa_verlet_ball_bounce"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
+]
 
 [[package]]
 name = "spirv"

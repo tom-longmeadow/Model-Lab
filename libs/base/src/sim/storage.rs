@@ -1,7 +1,4 @@
-use std::alloc::Layout;
-
-
-
+  
 /// Represents any simulation storage.
 /// Makes no assumptions about memory layout, threading,
 /// buffering, or the type of simulation.
@@ -26,23 +23,51 @@ pub trait Storage {
     fn clear(&mut self); 
 }
 
-
 /// A marker trait for storage that is directly and synchronously accessible by the CPU.
 pub trait CpuStorage: Storage {
-    /// Creates new storage with an initial capacity hint.
-    fn new(capacity: usize) -> Self;
-}
-
-/// A marker trait for storage that resides primarily on the GPU. 
-pub trait GpuStorage: Storage {}
-
-/// Array-of-Structs storage — items held as a contiguous slice.
-/// Implement `as_slice`/`as_slice_mut`; everything else is derived.
-pub trait AosCpuStorage: CpuStorage {
     type Item: Sized;
 
+    /// Creates new storage with an initial capacity hint.
+    fn new(capacity: usize) -> Self;
+
+    /// Appends an item to the storage backend.
     fn push(&mut self, item: Self::Item);
+
+    /// Removes an item at the given index by swapping it with the last element.
+    /// Works safely across both AoS and SoA implementations.
     fn swap_remove(&mut self, index: usize) -> Self::Item;
+
+    /// Batch-removes multiple indices in a single pass without disrupting lower indices.
+    /// This implementation works universally on both AoS and SoA containers.
+    fn remove_indices(&mut self, indices: &mut [usize]) {
+        // 1. Sort descending to prevent shifting unresolved lower indices
+        indices.sort_unstable_by(|a, b| b.cmp(a));
+        
+        let current_len = self.len();
+        let mut last_seen = None;
+        
+        // 2. Filter out duplicates manually in a single pass
+        for &i in indices.iter() {
+            if Some(i) == last_seen {
+                continue; 
+            }
+            last_seen = Some(i);
+            
+            // 3. Perform the swap removal safely using layout-agnostic primitives
+            if i < current_len {
+                self.swap_remove(i);
+            }
+        }
+    }
+}
+
+// =========================================================================
+// 2. PARADIGM-SPECIFIC EXTENSION TRAITS (AoS vs SoA)
+// =========================================================================
+
+/// Specialized trait for Array-of-Structs (AoS) memory layouts.
+/// Provides direct access to the underlying contiguous struct slice.
+pub trait AosCpuStorage: CpuStorage {
     fn as_slice(&self)         -> &[Self::Item];
     fn as_slice_mut(&mut self) -> &mut [Self::Item];
 
@@ -53,31 +78,10 @@ pub trait AosCpuStorage: CpuStorage {
     fn iter_mut(&mut self) -> std::slice::IterMut<'_, Self::Item> { self.as_slice_mut().iter_mut() }
 
     fn swap(&mut self, a: usize, b: usize) { self.as_slice_mut().swap(a, b); }
-
-    fn remove_indices(&mut self, indices: &mut [usize]) {
-        // 1. Sort descending as before
-        indices.sort_unstable_by(|a, b| b.cmp(a));
-        
-        let current_len = self.as_slice().len();
-        let mut last_seen = None;
-        
-        // 2. Filter out duplicates manually in a single pass
-        for &i in indices.iter() {
-            // Check if this index matches the previous one we processed
-            if Some(i) == last_seen {
-                continue; 
-            }
-            last_seen = Some(i);
-            
-            // 3. Perform the swap removal safely
-            if i < current_len {
-                self.swap_remove(i);
-            }
-        }
-    }
 }
 
- pub trait SoaCpuStorage: CpuStorage {
+/// Specialized trait for Structure-of-Arrays (SoA) memory layouts.
+pub trait SoaCpuStorage: CpuStorage<Item = Self::Layout> {
     type Layout: SoaLayout;
     fn columns(&self) -> &[RawColumn];
     fn columns_mut(&mut self) -> &mut [RawColumn];
@@ -87,17 +91,27 @@ pub trait AosCpuStorage: CpuStorage {
 pub struct RawColumn {
     pub ptr: *mut u8,
     pub cap: usize,
-    pub element_layout: Layout,
+    pub element_layout: std::alloc::Layout,
 }
 
 /// Marked unsafe because implementations must perfectly match layout sizes
 /// and perform valid manual byte offsets on push/read routines.
 pub unsafe trait SoaLayout: Sized {
-    const LAYOUTS: &'static [Layout];
+    const LAYOUTS: &'static [std::alloc::Layout];
+    
+    /// # Safety
+    /// Caller must ensure `index` is within bounds of the allocated `cols` capacity.
     unsafe fn push_cols(&self, cols: &mut [RawColumn], index: usize);
+    
+    /// # Safety
+    /// Caller must ensure `index` points to a valid, initialized element slot.
     unsafe fn read_cols(cols: &[RawColumn], index: usize) -> Self;
+    
+    /// # Safety
+    /// Caller must ensure `index` is less than `current_len`.
     unsafe fn swap_remove_cols(cols: &mut [RawColumn], index: usize, current_len: usize);
 }
+ 
 
 
 // pub trait SoaLayout: Sized {

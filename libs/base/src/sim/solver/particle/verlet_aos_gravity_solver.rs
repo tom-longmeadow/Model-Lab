@@ -1,10 +1,9 @@
  use std::hash::Hash; 
 use crate::math::{FloatScalar, Vector}; 
 use crate::sim::solver::Solver;
-use crate::sim::solver::particle::environment::ParticleEnvironment;
-use crate::sim::solver::particle::space::collision::CollisionRegistry; 
-use crate::sim::solver::particle::verlet_aos_vec_storage::VerletParticleAosVecStorage;
-use crate::sim::solver::particle::verlet_physics::VerletPhysics;
+use crate::sim::solver::particle::environment::ParticleEnvironment; 
+use crate::sim::solver::particle::verlet_aos_vec_storage::{AoSSimulationView, VerletParticleAosVecStorage};
+use crate::sim::solver::particle::verlet_physics::{VerletCoreEngine, VerletPhysics};
 use crate::sim::storage::{AosCpuStorage, Storage};
 
 pub struct VerletAosGravitySolver<V> 
@@ -32,24 +31,24 @@ where
         }
     }
 }
-
-impl<V> Solver<VerletParticleAosVecStorage<V>, ParticleEnvironment<V>> for VerletAosGravitySolver<V>
+impl<V: Vector + 'static> Solver<VerletParticleAosVecStorage<V>, ParticleEnvironment<V>> for VerletAosGravitySolver<V>
 where
-    V: Vector,
-    V::Quantized: Hash + Eq,
+    V::Quantized: std::hash::Hash + Eq,
 {
- 
     fn init(&mut self, _storage: &mut VerletParticleAosVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
 
     fn pre_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, _dt: f64, _tick: u64, environment: &mut ParticleEnvironment<V>) {
         environment.state.update_jitter(_tick);
-        if storage.len() != self.scratch_radii.len() {
+        
+        let len = Storage::len(storage);
+        if len != self.scratch_radii.len() {
             self.scratch_radii.clear();
 
             type S<V> = <V as Vector>::Scalar; 
             let mut min_radius = S::<V>::INFINITY;
             let mut max_radius = S::<V>::NEG_INFINITY;
 
+            // Access continuous layout items slice via AosCpuStorage trait API
             for p in storage.as_slice().iter() {
                 self.scratch_radii.push(p.radius);
 
@@ -62,121 +61,40 @@ where
         }
     }
     
-    fn sub_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>,  dt: f64, environment: &ParticleEnvironment<V>) {
-               
-        // KINETICS PASS 
-        let sub_step_dt = <V::Scalar as FloatScalar>::from_f64(dt);
-        for p in storage.iter_mut() {
-            environment.gravity.get();
-            let mut acc: V = environment.gravity.get(); 
-            VerletPhysics::update_kinetics(sub_step_dt, &environment, &mut p.pos, &mut p.pos_old, &mut acc);
-        }
+    fn sub_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, dt: f64, environment: &ParticleEnvironment<V>) {
+        let len = Storage::len(storage);
+        if len == 0 { return; }
 
-        let len = storage.len();
-        let mut collisions = CollisionRegistry::new();
-        
+        let sub_step_dt = <V::Scalar as FloatScalar>::from_f64(dt);
+        let gravity_acc: V = environment.gravity.get(); 
+
         self.scratch_pos.clear();
         self.scratch_pos_old.clear(); 
 
-        for p in storage.iter() {
+        // 1. KINETICS PASS + SCRATCH ALIGNMENT
+        // Integrate forces and build contiguous vectors simultaneously to maximize L1 hit rates
+        for p in storage.as_slice_mut().iter_mut() {
+            let mut acc = gravity_acc;
+            VerletPhysics::update_kinetics(sub_step_dt, environment, &mut p.pos, &mut p.pos_old, &mut acc);
+            
             self.scratch_pos.push(p.pos);
             self.scratch_pos_old.push(p.pos_old); 
         }
 
-        // Run the heavy spatial partition / broadphase detection once
-        VerletPhysics.detect_collisions(len, &self.scratch_radii, &self.scratch_pos, &mut collisions);
+        // 2. VIEW BINDING & PIPELINE DELEGATION
+        // Wrap our tracking arrays in our single-frame simulation helper structure layout context
+        let mut view = AoSSimulationView {
+            storage,
+            scratch_pos: &mut self.scratch_pos,
+            scratch_old: &mut self.scratch_pos_old,
+            scratch_radii: &self.scratch_radii,
+        };
 
-        // Relax ALL positional constraints simultaneously
-        for _ in 0..environment.tuning.collision_iterations {
-            for collision in &collisions.pairs {
-                let a = collision.a_index;
-                let b = collision.b_index;
-                if a == b { continue; }
-
-                let (pos_a, pos_b) = unsafe {
-                    let pos_ptr = self.scratch_pos.as_mut_ptr();
-                    (&mut *pos_ptr.add(a), &mut *pos_ptr.add(b))
-                };
-
-                let inv_mass = <V::Scalar as FloatScalar>::from_f64(1.0);
-
-                // Keep this strictly focused on positions to avoid iteration multiplying
-                VerletPhysics::resolve_particle_collisions(
-                    &environment,
-                    pos_a, 
-                    pos_b, 
-                    self.scratch_radii[a], 
-                    self.scratch_radii[b], 
-                    inv_mass, 
-                    inv_mass,
-                );
-            } 
-        }
-
-        for collision in &collisions.pairs {
-            let a = collision.a_index;
-            let b = collision.b_index;
-            if a == b { continue; }
-
-            let (pos_a, pos_b, pos_old_a, pos_old_b) = unsafe {
-                let pos_ptr = self.scratch_pos.as_mut_ptr();
-                let pos_old_ptr = self.scratch_pos_old.as_mut_ptr(); // Assumes scratch_pos_old exists
-                (
-                    &*pos_ptr.add(a),
-                    &*pos_ptr.add(b),
-                    &mut *pos_old_ptr.add(a),
-                    &mut *pos_old_ptr.add(b),
-                )
-            };
-
-            let inv_mass = <V::Scalar as FloatScalar>::from_f64(1.0);
-
-            VerletPhysics::apply_particle_restitution(
-                &environment.tuning.physics,
-                pos_a,
-                pos_b,
-                pos_old_a,
-                pos_old_b,
-                self.scratch_radii[a],
-                self.scratch_radii[b],
-                inv_mass,
-                inv_mass,
-            );
-        }
-
-   
-        for i in 0..len {
-            VerletPhysics::apply_position_constraints(
-                sub_step_dt, &environment, 
-                self.scratch_radii[i], &mut self.scratch_pos[i], &mut self.scratch_pos_old[i]
-            );
-        }
-
-        // Apply the safety clamp over time and commit everything back to storage uniformly
-        let sub_step_max_vel = environment.tuning.physics.max_velocity * sub_step_dt;
-        let max_vel_squared = sub_step_max_vel * sub_step_max_vel;
-
-        for (i, p) in storage.iter_mut().enumerate() {
-            let pos = self.scratch_pos[i];
-            let mut pos_old = self.scratch_pos_old[i];
-            let vel: V = pos - pos_old;
-            let vel_sq = vel.length_squared();
-
-            if vel_sq > max_vel_squared {
-                let vel_len = vel_sq.sqrt();  
-                let clamped_vel = vel * (sub_step_max_vel / vel_len); 
-                pos_old = pos - clamped_vel;
-            }
-
-            p.pos = pos;
-            p.pos_old = pos_old;
-        }
+        VerletCoreEngine::execute_sub_step(&mut view, dt, environment, &self.scratch_radii);
     }
     
     fn post_step(&mut self, _storage: &mut VerletParticleAosVecStorage<V>, _dt: f64, _environment: &ParticleEnvironment<V>) { }
-     
 }
-
 
 
  

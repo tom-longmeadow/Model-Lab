@@ -1,6 +1,7 @@
 use crate::sim::storage::{AosCpuStorage, CpuStorage, Storage};
 
  
+
 pub struct AosVecStorage<Item> {
     items: Vec<Item>,
 }
@@ -26,22 +27,22 @@ impl<Item> Storage for AosVecStorage<Item> {
 }
 
 impl<Item> CpuStorage for AosVecStorage<Item> {
+    type Item = Item; // FIXED: Associated type moves to CpuStorage
+
     fn new(capacity: usize) -> Self {
         Self { items: Vec::with_capacity(capacity) }
+    }
+
+    fn push(&mut self, item: Self::Item) { // FIXED: push moves to CpuStorage
+        self.items.push(item);
+    }
+
+    fn swap_remove(&mut self, index: usize) -> Self::Item { // FIXED: swap_remove moves to CpuStorage
+        self.items.swap_remove(index)
     }
 }
 
 impl<Item> AosCpuStorage for AosVecStorage<Item> {
-    type Item = Item;
-
-    fn push(&mut self, item: Self::Item) {
-        self.items.push(item);
-    }
-
-    fn swap_remove(&mut self, index: usize) -> Self::Item {
-        self.items.swap_remove(index)
-    }
-
     fn as_slice(&self) -> &[Self::Item] {
         &self.items
     }

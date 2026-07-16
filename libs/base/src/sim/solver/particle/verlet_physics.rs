@@ -1,5 +1,96 @@
-use crate::{math::{FloatScalar, Vector, VectorMask}, sim::solver::particle::{environment::ParticleEnvironment, runtime::RuntimeState, space::{GridSpace, collision::CollisionRegistry}, tuning::PhysicsTuning}};
+use crate::{math::{FloatScalar, Vector, VectorMask}, 
+sim::solver::particle::{data_layout::ParticleDataLayout, environment::ParticleEnvironment, 
+    space::collision::CollisionRegistry, tuning::PhysicsTuning}};
  
+
+
+pub struct VerletCoreEngine;
+impl VerletCoreEngine {
+    pub fn execute_sub_step<V, L>(
+        layout: &mut L,
+        dt: f64,
+        environment: &ParticleEnvironment<V>,
+        scratch_radii: &[V::Scalar],
+    ) where
+        V: Vector,
+        L: ParticleDataLayout<V>,
+    {
+        let len = layout.len();
+        if len == 0 { return; }
+
+        let sub_step_dt = <V::Scalar as FloatScalar>::from_f64(dt);
+        let mut collisions = CollisionRegistry::new();
+
+        // 1. Broadphase: Operates directly on the provided data layouts
+        VerletPhysics.detect_collisions(len, scratch_radii, layout.positions_mut(), &mut collisions);
+
+        // 2. Iterative Position Constraint Relaxation
+        let inv_mass = <V::Scalar as FloatScalar>::from_f64(1.0);
+        let pos_slice = layout.positions_mut();
+        
+        for _ in 0..environment.tuning.collision_iterations {
+            for collision in &collisions.pairs {
+                let a = collision.a_index;
+                let b = collision.b_index;
+                if a == b { continue; }
+
+                // Safe Simultaneous Index Split
+                if a < b {
+                    let (left, right) = pos_slice.split_at_mut(b);
+                    VerletPhysics::resolve_particle_collisions(
+                        environment, &mut left[a], &mut right[0], 
+                        scratch_radii[a], scratch_radii[b], inv_mass, inv_mass
+                    );
+                } else {
+                    let (left, right) = pos_slice.split_at_mut(a);
+                    VerletPhysics::resolve_particle_collisions(
+                        environment, &mut right[0], &mut left[b], 
+                        scratch_radii[a], scratch_radii[b], inv_mass, inv_mass
+                    );
+                }
+            } 
+        }
+
+        let (pos_slice, old_slice) = layout.positions_and_old_mut();
+        for collision in &collisions.pairs {
+            let a = collision.a_index;
+            let b = collision.b_index;
+            if a == b { continue; }
+
+            let (pos_a, pos_b) = if a < b {
+                let (left, right) = pos_slice.split_at_mut(b); (&left[a], &right[0])
+            } else {
+                let (left, right) = pos_slice.split_at_mut(a); (&right[0], &left[b])
+            };
+
+            let (old_a, old_b) = if a < b {
+                let (left, right) = old_slice.split_at_mut(b); (&mut left[a], &mut right[0])
+            } else {
+                let (left, right) = old_slice.split_at_mut(a); (&mut right[0], &mut left[b])
+            };
+
+            VerletPhysics::apply_particle_restitution(
+                &environment.tuning.physics, pos_a, pos_b, old_a, old_b,
+                scratch_radii[a], scratch_radii[b], inv_mass, inv_mass,
+            );
+        }
+
+        // 4. Global Environmental Constraints
+        let (pos_slice, old_slice) = layout.positions_and_old_mut();
+        for i in 0..len {
+            VerletPhysics::apply_position_constraints(
+                sub_step_dt, environment, scratch_radii[i], &mut pos_slice[i], &mut old_slice[i]
+            );
+        }
+
+        // 5. Final Clamping & Writeback
+        let sub_step_max_vel = environment.tuning.physics.max_velocity * sub_step_dt;
+        let max_vel_squared = sub_step_max_vel * sub_step_max_vel;
+        layout.commit_kinetics(max_vel_squared, sub_step_max_vel);
+    }
+}
+
+
 pub struct VerletPhysics; 
 impl VerletPhysics { 
 

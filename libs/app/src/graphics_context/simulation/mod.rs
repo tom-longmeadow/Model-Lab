@@ -1,4 +1,5 @@
 pub mod aos;
+pub mod soa;
 pub mod pass;
 pub mod renderer;
 

@@ -3,8 +3,11 @@ members = [
     "libs/base", 
     "libs/app", 
     "apps/particle/aos_verlet",
+    "apps/particle/soa_verlet",
 ]
 resolver = "2"
+
+default-members = ["apps/particle/aos_verlet"]
 
 [workspace.dependencies]
 app = { path = "libs/app" } 
