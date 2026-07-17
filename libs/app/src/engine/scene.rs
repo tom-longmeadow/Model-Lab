@@ -1,5 +1,6 @@
  pub mod ball_bounce_particle_aos_verlet;
  pub mod ball_bounce_particle_soa_verlet;
+ pub mod particle_scene_config;
 
 use crate::{
     engine::input::InputState, 
@@ -18,4 +19,7 @@ pub trait Scene {
     /// This is called every frame before rendering.
     fn update(&mut self, frame_time: f64, input: &InputState, renderer: &mut GraphicsContext);
 }
+
+
+ 
 

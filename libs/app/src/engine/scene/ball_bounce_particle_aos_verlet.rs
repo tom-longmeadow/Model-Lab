@@ -1,16 +1,18 @@
 use std::{marker::PhantomData, sync::{Arc, Mutex}};
  use std::hash::Hash;
-use base::{math::Vector, sim::{lifecycle::stream_config::StreamConfig, simulation::Simulation, 
-    solver::particle::{environment::{GravityModel, ParticleEnvironment},
-     runtime::RuntimeState, space::GridSpace, tuning::SimulationTuning, 
-     verlet_aos_gravity_solver::VerletAosGravitySolver, 
-     verlet_aos_stream_lifecycle::AosStreamLifecycle, 
-     verlet_aos_vec_storage::VerletParticleAosVecStorage, 
-     verlet_particle::VerletParticle}, storage::CpuStorage}, 
-     ui::layout::color::Color};
+use base::{math::Vector, 
+    sim::{
+        simulation::Simulation, 
+        solver::particle::{ 
+        verlet_aos_gravity_solver::VerletAosGravitySolver, 
+        verlet_aos_stream_lifecycle::AosStreamLifecycle, 
+        verlet_aos_vec_storage::VerletParticleAosVecStorage, 
+        verlet_particle::VerletParticle}, storage::CpuStorage
+    }
+};
  
 use crate::{
-    engine::{input::InputState, scene::Scene},
+    engine::{input::InputState, scene::{Scene, particle_scene_config::ParticleSceneConfig}},
     graphics_context::{
         GraphicsContext,
         pass::hud::{HudPass, HudState},
@@ -44,46 +46,16 @@ where
         if renderer.pass_count() > 0 {
             return;
         }
-
-        let max_particles: usize = 300;
-        let hz: f64 = 60.0;
-        let substep_count: u64 = 8;
-        let collision_iterations: u64 = 4;
-
-        let particle_radius: V::Scalar = 10.0.into();  
-        let cell_size = particle_radius * 1.0.into();  
-        let gravity_force= V::from_f64_array([0.0, -1600.0]);
-
-        let space = GridSpace::new(cell_size);
-        let tuning=  SimulationTuning::new(substep_count, collision_iterations, particle_radius);
-        let state=  RuntimeState::new();
-        let gravity = GravityModel::Constant(gravity_force);
-        let env = ParticleEnvironment::new(space, tuning, state, gravity);
-
-        
-
-        let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
-        let particle_relative_location = V::from_f64_array([0.2, 0.97]);
-        let lifecycle_start_tick: u64 = 50;
-        let lifecycle_ticks_per_spawn: u64 = 3;   
-        let particle_radius: V::Scalar = 10.0.into();  
-        let particle_colors: &'static [Color] = &Color::RAINBOW;
-
-        let stream_config = StreamConfig::<V>::new(
-            lifecycle_start_tick, 
-            lifecycle_ticks_per_spawn, 
-            max_particles, 
-            particle_relative_location,
-            particle_initial_velocity, 
-            particle_radius, 
-            particle_colors
-        );
-        
+ 
+        let hz = ParticleSceneConfig::hz();
+        let env = ParticleSceneConfig::environment();
+        let config = ParticleSceneConfig::config();
+ 
         let sim = Simulation::new(
             hz,
-            <VerletParticleAosVecStorage<V> as CpuStorage>::new(max_particles),
-            VerletAosGravitySolver::<V>::new( max_particles),
-            AosStreamLifecycle::<V>::new(stream_config),
+            <VerletParticleAosVecStorage<V> as CpuStorage>::new(config.max_particles),
+            VerletAosGravitySolver::<V>::new( config.max_particles),
+            AosStreamLifecycle::<V>::new(config),
             env,
         );   
 
