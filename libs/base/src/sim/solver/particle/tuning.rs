@@ -43,9 +43,8 @@ pub struct PhysicsTuning<S: FloatScalar> {
 }
 
 impl<S: FloatScalar> PhysicsTuning<S> { 
-    pub fn new(size_min: S, size_max: S, collision_iterations: u64) -> Self {
-        // Fallback or baseline restitution (0.5)
-        let default_restitution = S::from_f64(0.75); 
+    pub fn new(size_min: S, size_max: S, collision_iterations: u64) -> Self { 
+        let default_restitution = S::from_f64(0.65); 
         
         Self::with_all(
             size_min, 
@@ -66,7 +65,7 @@ impl<S: FloatScalar> PhysicsTuning<S> {
         let slop_coefficient = S::from_f64(0.02);   
         let bounce_threshold_factor = S::from_f64(2.0);  
         let global_damping_constant = S::from_f64(0.1);
-        let friction_constant = S::from_f64(0.1);
+        let friction_constant = S::from_f64(0.2);
         let target_frame_bias = S::from_f64(0.4);  
         let max_velocity = size_max * S::from_f64(600.0);   
 

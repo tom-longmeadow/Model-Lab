@@ -25,7 +25,7 @@ where
             // Constructs the logical item layout using the builder methods
             let p = VerletParticle::new(position)
                 .with_velocity(self.config.velocity.clone()) 
-                .with_radius(self.config.radius.clone()) 
+                .with_radius(self.config.radius.clone(), self.config.density.clone()) 
                 .with_color(color);
              
             // Appends the entity directly into the columns using our custom SoA vector storage implementation

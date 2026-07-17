@@ -26,7 +26,7 @@ where
              
             let p = VerletParticle::new(position)
                 .with_velocity(self.config.velocity.clone()) 
-                .with_radius(self.config.radius.clone()) 
+                .with_radius(self.config.radius.clone(), self.config.density.clone()) 
                 .with_color(color);
              
             storage.push(p);

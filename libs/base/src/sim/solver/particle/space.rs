@@ -1,5 +1,6 @@
-pub mod grid;
-pub mod collision;
+pub mod grid; 
+pub mod collision_registry;
+pub mod grid_key;
 
 use crate::{aabb::AABB, insets::Insets, math::{Vector}, sim::{solver::{ 
     particle::{space::{ grid::UniformGrid}}}}};

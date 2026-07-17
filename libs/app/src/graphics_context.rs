@@ -11,6 +11,7 @@ pub mod vertex;
 pub mod renderer;
 pub mod shader;
 pub mod simulation;
+pub mod state; 
 
 use crate::graphics_context::{
     config::RendererConfig,

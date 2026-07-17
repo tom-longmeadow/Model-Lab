@@ -1,10 +1,11 @@
-use base::mesh::{Mesh, kind::MeshKind};
+use base::mesh::{Mesh, kind::MeshKind, vertex::Vertex};
 use wgpu::util::DeviceExt;
 use crate::graphics_context::{
-    buffers::GpuMeshBuffers, renderer::Renderer, shader::{ShaderBuilder, fragment::FragmentFunction, vertex::VertexFunction, vertex_input::VertexInput, vertex_output::VertexOutput}, vertex::GpuVertex
+    buffers::GpuMeshBuffers, renderer::Renderer, shader::{ShaderBuilder, 
+        fragment::FragmentFunction, vertex::VertexFunction, vertex_input::VertexInput, vertex_output::VertexOutput}, vertex::WgpuVertexExt,  
 };
 
-/// A dedicated renderer that knows how to draw a slice of `Mesh` objects.
+ 
 pub struct MeshRenderer {
     data: Vec<Mesh>,
     pipeline_tri: Option<wgpu::RenderPipeline>,
@@ -123,15 +124,25 @@ impl Renderer for MeshRenderer {
         self.buffers = self.data
             .iter()
             .map(|mesh| {
-                let gpu_verts: Vec<GpuVertex> =
-                    mesh.vertices.iter().copied().map(GpuVertex::from).collect();
+                // 1. Manually unpack and convert fields directly inside a clean vector map
+                let gpu_verts: Vec<Vertex> = mesh.vertices
+                    .iter()
+                    .map(|v| Vertex {
+                        position: v.position.into(), // Converts Vec3 -> [f32; 3]
+                        normal:   v.normal.into(),   // Converts Vec3 -> [f32; 3]
+                        uv:       v.uv.into(),       // Converts Vec2 -> [f32; 2]
+                        color:    v.color.into(),    // Converts Vec4 -> [f32; 4]
+                    })
+                    .collect();
 
+                // 2. Initialize vertex buffer
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("MeshRenderer Vertex Buffer"),
                     contents: bytemuck::cast_slice(&gpu_verts),
                     usage: wgpu::BufferUsages::VERTEX,
                 });
 
+                // 3. Initialize index buffer
                 let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("MeshRenderer Index Buffer"),
                     contents: bytemuck::cast_slice(&mesh.indices),
@@ -182,7 +193,7 @@ fn build_pipeline(
         vertex: wgpu::VertexState {
             module: shader,
             entry_point: Some("vs_main"),
-            buffers: &[GpuVertex::layout()],
+            buffers: &[<base::mesh::vertex::Vertex as WgpuVertexExt>::layout()],
             compilation_options: Default::default(), // Add compilation_options
         },
         fragment: Some(wgpu::FragmentState {

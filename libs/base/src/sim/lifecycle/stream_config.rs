@@ -1,5 +1,5 @@
 use crate::{aabb::AABB, math::{Vector}, ui::layout::color::Color};
-
+use crate::math::FloatScalar;
 
 pub struct StreamConfig<V: Vector> {
     pub start_tick: u64,
@@ -9,6 +9,7 @@ pub struct StreamConfig<V: Vector> {
     pub relative_position: V,
     pub velocity: V,
     pub radius: V::Scalar,
+    pub density: V::Scalar,
     pub colors: &'static [Color], 
 }
 
@@ -30,6 +31,7 @@ impl<V: Vector> StreamConfig<V> {
             relative_position, 
             velocity, 
             radius, 
+            density: V::Scalar::ONE,
             colors 
         }
     }

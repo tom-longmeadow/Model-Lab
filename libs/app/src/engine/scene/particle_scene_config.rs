@@ -11,33 +11,6 @@ impl ParticleSceneConfig{
     {
         60.0 
     }
- 
-    pub fn config<V>() -> StreamConfig<V> 
-    where 
-        V: Vector, 
-        V::Scalar: From<f64>, 
-        V::Quantized: Eq + Hash, 
-    {
-        let max_particles: usize = 300;  
-        let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
-        let particle_relative_location = V::from_f64_array([0.2, 0.97]);
-        let lifecycle_start_tick: u64 = 50;
-        let lifecycle_ticks_per_spawn: u64 = 3;   
-        let particle_radius: V::Scalar = 10.0.into();  
-        let particle_colors: &'static [Color] = &Color::RAINBOW;
-
-        let stream_config = StreamConfig::<V>::new(
-            lifecycle_start_tick, 
-            lifecycle_ticks_per_spawn, 
-            max_particles, 
-            particle_relative_location,
-            particle_initial_velocity, 
-            particle_radius, 
-            particle_colors
-        );
-
-        stream_config
-    }
 
     pub fn environment<V>() -> ParticleEnvironment<V> 
     where 
@@ -59,5 +32,34 @@ impl ParticleSceneConfig{
         let env = ParticleEnvironment::new(space, tuning, state, gravity);
         env 
     } 
+ 
+    pub fn config<V>() -> StreamConfig<V> 
+    where 
+        V: Vector, 
+        V::Scalar: From<f64>, 
+        V::Quantized: Eq + Hash, 
+    {
+        let max_particles: usize = 400;  
+        let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
+        let particle_relative_location = V::from_f64_array([0.2, 0.97]);
+        let lifecycle_start_tick: u64 = 20;
+        let lifecycle_ticks_per_spawn: u64 = 3;   
+        let particle_radius: V::Scalar = 10.0.into();  
+        let particle_colors: &'static [Color] = &Color::RAINBOW;
+
+        let stream_config = StreamConfig::<V>::new(
+            lifecycle_start_tick, 
+            lifecycle_ticks_per_spawn, 
+            max_particles, 
+            particle_relative_location,
+            particle_initial_velocity, 
+            particle_radius, 
+            particle_colors
+        );
+
+        stream_config
+    }
+
+    
 
 }

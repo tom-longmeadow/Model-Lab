@@ -1,48 +1,8 @@
 use std::collections::HashMap;
 use std::hash::Hash; 
-use crate::math::{FloatScalar, IVec2, IVec3,  Vector};
-use crate::sim::solver::particle::space::collision::CollisionRegistry; 
-
-// pub type UniformGrid2D = UniformGrid<IVec2, DVec2>;
-// pub type UniformGrid3D = UniformGrid<IVec3, DVec3>;
-
-pub trait GridKey: Hash + Eq + Copy + std::ops::Add<Output = Self> + 'static { 
-    const OFFSETS: &'static [Self];
-}
-
-impl GridKey for IVec2 {
-    const OFFSETS: &'static [Self] = &[
-        IVec2::new(1, 0),
-        IVec2::new(-1, 1),
-        IVec2::new(0, 1),
-        IVec2::new(1, 1),
-    ];
-}
-
-impl GridKey for IVec3 {
-    // 13 offsets representing exactly half of a 3x3x3 cube neighborhood.
-    // This ensures no 3D cell pair is ever evaluated backward or duplicated.
-    const OFFSETS: &'static [Self] = &[
-        // Z = 0 plane (current layer, same as 2D)
-        IVec3::new(1, 0, 0),
-        IVec3::new(-1, 1, 0),
-        IVec3::new(0, 1, 0),
-        IVec3::new(1, 1, 0),
-        
-        // Z = 1 plane (the layer directly above/forward)
-        IVec3::new(-1, -1, 1),
-        IVec3::new(0, -1, 1),
-        IVec3::new(1, -1, 1),
-        IVec3::new(-1, 0, 1),
-        IVec3::new(0, 0, 1),
-        IVec3::new(1, 0, 1),
-        IVec3::new(-1, 1, 1),
-        IVec3::new(0, 1, 1),
-        IVec3::new(1, 1, 1),
-    ];
-}
-
-// --- DATA STRUCTURES ---
+use crate::{math::{FloatScalar,  Vector}, sim::solver::particle::{space::{collision_registry::CollisionRegistry, grid_key::GridKey}, verlet_particle::VerletParticle, verlet_soa_vec_storage::ComponentSliceMut}}; 
+ 
+ 
 
 #[derive(Default)]
 pub struct GridCell {
@@ -99,70 +59,175 @@ where
     }
 }
 
-impl<V: Vector> UniformGrid<V>
-where
-    V::Quantized: GridKey + Hash + Eq,
+impl<V: Vector> UniformGrid<V> 
+where 
+    <V as Vector>::Quantized: Hash + Eq + Copy,
 {
-    #[inline(always)]
-    fn check_and_append_collision(
-        &self,
-        idx_a: usize,
-        idx_b: usize,
-        positions: &[V],
-        radii: &[V::Scalar],
-        registry: &mut CollisionRegistry<V>,
-    ) {
-        let delta = positions[idx_a] - positions[idx_b];
-        let dist_sq = delta.dot(delta);
-        let target_dist = radii[idx_a] + radii[idx_b];
-
-        if dist_sq < target_dist * target_dist && dist_sq > V::Scalar::ZERO {
-            let distance = dist_sq.sqrt();
-            let normal = delta * (V::Scalar::ONE / distance);
-            registry.push(idx_a, idx_b, normal, target_dist - distance);
-        }
-    }
-
-    pub fn find_collisions(
-        &self,
-        positions: &[V],
-        radii: &[V::Scalar],
-        registry: &mut CollisionRegistry<V>,
-    ) {
-        // Grab the internal offsets defined by your quantized type's trait
+     #[inline(always)]
+    fn traverse_grid_cells(&self, mut check_pair: impl FnMut(usize, usize)) {
         type QKey<VecT> = <VecT as Vector>::Quantized;
 
         for (cell_key, cell) in &self.cells {
             let indices = &cell.indices;
             let len = indices.len();
 
-            // 1. INTRA-CELL (Self-collisions within the same grid unit)
+            // 1. INTRA-CELL (Self-collisions within the same grid container cell)
             if len >= 2 {
                 for i in 0..len.saturating_sub(1) {
                     for j in (i + 1)..len {
-                        self.check_and_append_collision(
-                            indices[i], indices[j], positions, radii, registry,
-                        );
+                        check_pair(indices[i], indices[j]);
                     }
                 }
             }
 
-            // 2. NEIGHBOR-CELL (Querying surrounding boundaries)
-            for &offset in QKey::<V>::OFFSETS {
+            // 2. NEIGHBOR-CELL (Querying adjacent localized grid cell buckets)
+            for &offset in QKey::<V>::OFFSETS { 
                 let neighbor_key = *cell_key + offset;
                 if let Some(neighbor_cell) = self.cells.get(&neighbor_key) {
                     for &idx_a in indices {
                         for &idx_b in &neighbor_cell.indices {
-                            self.check_and_append_collision(
-                                idx_a, idx_b, positions, radii, registry,
-                            );
+                            check_pair(idx_a, idx_b);
                         }
                     }
                 }
             }
         }
     }
+
+    pub fn soa_find_collisions(
+        &self,
+        pos_x: &ComponentSliceMut<V::Scalar>,
+        pos_y:&ComponentSliceMut<V::Scalar>,
+        radii: &[V::Scalar], // 🟢 FIXED: Remapped to standard flat slice layout
+        registry: &mut CollisionRegistry,
+    ) {
+        self.traverse_grid_cells(|a, b| {
+            self.soa_check_for_collision(a, b, pos_x, pos_y, radii, registry);
+        });
+    }
+
+    pub fn aos_find_collisions(
+        &self,
+        particles: &[VerletParticle<V>], 
+        registry: &mut CollisionRegistry,
+    ) {
+        self.traverse_grid_cells(|a, b| {
+            self.aos_check_for_collision(a, b, particles, registry);
+        });
+    }
+
+    #[inline(always)]
+    fn soa_check_for_collision(
+        &self,
+        idx_a: usize,
+        idx_b: usize,
+        pos_x: &ComponentSliceMut<V::Scalar>,   
+        pos_y: &ComponentSliceMut<V::Scalar>,
+        radii: &[V::Scalar], // 🟢 FIXED: Remapped to standard flat slice layout
+        registry: &mut CollisionRegistry,
+    ) {
+        // 🟢 FIXED: Replaced standard array indexing with your optimized strided getters
+        unsafe {
+            let dx = pos_x.get_unchecked(idx_b) - pos_x.get_unchecked(idx_a); 
+            let dy = pos_y.get_unchecked(idx_b) - pos_y.get_unchecked(idx_a);
+            let dist_sq = dx * dx + dy * dy;
+            let target_dist = radii[idx_a] + radii[idx_b];
+
+            if dist_sq < target_dist * target_dist || dist_sq == V::Scalar::ZERO {
+                registry.push(idx_a, idx_b);
+            }
+        }
+    }
+ 
+    #[inline(always)]
+    fn aos_check_for_collision(
+        &self,
+        idx_a: usize,
+        idx_b: usize,
+        particles: &[VerletParticle<V>],  
+        registry: &mut CollisionRegistry,
+    ) {
+        let p_a = &particles[idx_a];
+        let p_b = &particles[idx_b];
+
+        let delta = p_b.pos - p_a.pos; 
+        let dist_sq = delta.length_squared();
+        let target_dist = p_a.radius + p_b.radius;
+
+        // 🟢 FIXED: Fused particles (dist_sq == 0) are no longer dropped!
+        if dist_sq < target_dist * target_dist || dist_sq == V::Scalar::ZERO {
+            registry.push(idx_a, idx_b);
+        }
+    }
 }
+
+// impl<V: Vector> UniformGrid<V>
+// where
+//     V::Quantized: GridKey + Hash + Eq,
+// {
+
+    
+    
+    // #[inline(always)]
+    // fn check_and_append_collision(
+    //     &self,
+    //     idx_a: usize,
+    //     idx_b: usize,
+    //     positions: &[V],
+    //     radii: &[V::Scalar],
+    //     registry: &mut CollisionRegistry<V>,
+    // ) {
+    //     let delta = positions[idx_a] - positions[idx_b];
+    //     let dist_sq = delta.dot(delta);
+    //     let target_dist = radii[idx_a] + radii[idx_b];
+
+    //     if dist_sq < target_dist * target_dist && dist_sq > V::Scalar::ZERO {
+    //         let distance = dist_sq.sqrt();
+    //         let normal = delta * (V::Scalar::ONE / distance);
+    //         registry.push(idx_a, idx_b, normal, target_dist - distance);
+    //     }
+    // }
+
+    // pub fn find_collisions(
+    //     &self,
+    //     positions: &[V],
+    //     radii: &[V::Scalar],
+    //     registry: &mut CollisionRegistry<V>,
+    // ) {
+    //     // Grab the internal offsets defined by your quantized type's trait
+    //     type QKey<VecT> = <VecT as Vector>::Quantized;
+
+    //     for (cell_key, cell) in &self.cells {
+    //         let indices = &cell.indices;
+    //         let len = indices.len();
+
+    //         // 1. INTRA-CELL (Self-collisions within the same grid unit)
+    //         if len >= 2 {
+    //             for i in 0..len.saturating_sub(1) {
+    //                 for j in (i + 1)..len {
+    //                     self.check_and_append_collision(
+    //                         indices[i], indices[j], positions, radii, registry,
+    //                     );
+    //                 }
+    //             }
+    //         }
+
+    //         // 2. NEIGHBOR-CELL (Querying surrounding boundaries)
+    //         for &offset in QKey::<V>::OFFSETS {
+    //             let neighbor_key = *cell_key + offset;
+    //             if let Some(neighbor_cell) = self.cells.get(&neighbor_key) {
+    //                 for &idx_a in indices {
+    //                     for &idx_b in &neighbor_cell.indices {
+    //                         self.check_and_append_collision(
+    //                             idx_a, idx_b, positions, radii, registry,
+    //                         );
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+// }
  
 
  

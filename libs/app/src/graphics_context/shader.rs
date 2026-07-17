@@ -28,38 +28,28 @@ impl ShaderBuilder {
         }
     }
 
-    /// A shader for simple, colored AOS particles drawn as circles.
-    pub fn aos_color_particle() -> Self {
-        Self::new(
-            VertexOutput::ColorUv,
-            VertexFunction::ParticleAosColor,
-            FragmentFunction::Circular,
-        )
-        .with_vertex_input(VertexInput::ColorUv)
-        .label("AOS Color Particle")
-    }
+    // /// A shader for simple, colored AOS particles drawn as circles.
+    // pub fn aos_color_particle() -> Self {
+    //     Self::new(
+    //         VertexOutput::ColorUv,
+    //         VertexFunction::ParticleAosColor,
+    //         FragmentFunction::Circular,
+    //     )
+    //     .with_vertex_input(VertexInput::ColorUv)
+    //     .label("AOS Color Particle")
+    // }
 
-    /// A shader for simple, colored SOA particles drawn as circles.
-    pub fn soa_color_particle() -> Self {
-        // Note: No .with_vertex_input() call for SOA
-        Self::new(
-            VertexOutput::ColorUv,
-            VertexFunction::ParticleSoaColor,
-            FragmentFunction::Circular,
-        )
-        .label("SOA Color Particle")
-    }
+    // /// A shader for simple, colored SOA particles drawn as circles.
+    // pub fn soa_color_particle() -> Self {
+    //     // Note: No .with_vertex_input() call for SOA
+    //     Self::new(
+    //         VertexOutput::ColorUv,
+    //         VertexFunction::ParticleSoaColor,
+    //         FragmentFunction::Circular,
+    //     )
+    //     .label("SOA Color Particle")
+    // }
 
-    /// A shader for the UI, which uses a special vertex shader and passthrough fragment.
-    pub fn ui_mesh() -> Self {
-        Self::new(
-            VertexOutput::Color,
-            VertexFunction::Ui,
-            FragmentFunction::Passthrough,
-        )
-        .with_vertex_input(VertexInput::Color)
-        .label("UI Mesh")
-    }
     
 
     pub fn label(mut self, label: &'static str) -> Self {

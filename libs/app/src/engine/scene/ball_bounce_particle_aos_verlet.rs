@@ -54,7 +54,7 @@ where
         let sim = Simulation::new(
             hz,
             <VerletParticleAosVecStorage<V> as CpuStorage>::new(config.max_particles),
-            VerletAosGravitySolver::<V>::new( config.max_particles),
+            VerletAosGravitySolver::new( config.max_particles),
             AosStreamLifecycle::<V>::new(config),
             env,
         );   

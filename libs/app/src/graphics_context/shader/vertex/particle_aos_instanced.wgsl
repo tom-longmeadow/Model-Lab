@@ -5,9 +5,9 @@ struct ScreenUniforms {
     screen_height: f32,
 };
 
-
-
 @group(0) @binding(0) var<uniform> screen: ScreenUniforms; 
+
+ 
 
 // FIX: Reconstructs a precise f32 out of the f64 raw layout bit channels
 fn unpack_f64_to_f32(low_bits: u32, high_bits: u32) -> f32 {
@@ -29,12 +29,35 @@ fn unpack_f64_to_f32(low_bits: u32, high_bits: u32) -> f32 {
 
 @vertex
 fn vs_main(
-    in: VertexInput,
+    @builtin(vertex_index) vertex_idx: u32,
     @location(4) raw_pos:    vec4<f32>, 
     @location(5) raw_radius: vec2<f32>, 
     @location(6) color:      vec4<f32>, 
 ) -> VertexOutput {
 
+    // 1. Generate the 4 unique quad geometry corners procedurally
+    let quad_positions = array<vec2<f32>, 4>(
+        vec2<f32>(-1.0, -1.0), // Bottom-Left
+        vec2<f32>( 1.0, -1.0), // Bottom-Right
+        vec2<f32>( 1.0,  1.0), // Top-Right
+        vec2<f32>(-1.0,  1.0)  // Top-Left
+    );
+
+    let quad_uvs = array<vec2<f32>, 4>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>( 1.0, -1.0),
+        vec2<f32>( 1.0,  1.0),
+        vec2<f32>(-1.0,  1.0)
+    );
+
+    // 2. Unpack the unindexed 0..5 stream into localized quad indices [0, 1, 2, 0, 2, 3]
+    let index_map = array<u32, 6>(0u, 1u, 2u, 0u, 2u, 3u);
+    let target_quad_idx = index_map[vertex_idx % 6u];
+
+    let generated_position = quad_positions[target_quad_idx];
+    let generated_uv       = quad_uvs[target_quad_idx];
+
+    // 3. Process instance attributes (f64 bit shifting)
     let pos_bits_x_low  = bitcast<u32>(raw_pos.x);
     let pos_bits_x_high = bitcast<u32>(raw_pos.y);
     let pos_bits_y_low  = bitcast<u32>(raw_pos.z);
@@ -52,19 +75,20 @@ fn vs_main(
     let ndc_x = (pixel_x / screen.screen_width) * 2.0 - 1.0;
     let ndc_y = (pixel_y / screen.screen_height) * 2.0 - 1.0;
  
-   // Multiplying by 2.0 maps the pixel ratio onto the 2.0-unit total span of NDC space.
+    // Multiplying by 2.0 maps the pixel ratio onto the 2.0-unit total span of NDC space.
     // This perfectly aligns the 2-unit-wide base quad with your true physics metrics!
     let radius_ndc_x = (radius / screen.screen_width) * 2.0;
     let radius_ndc_y = (radius / screen.screen_height) * 2.0;
 
+    // Use our procedurally generated position coordinates instead of 'in.position'
     let scaled_offset = vec2<f32>(
-        in.position.x * radius_ndc_x,
-        in.position.y * radius_ndc_y
+        generated_position.x * radius_ndc_x,
+        generated_position.y * radius_ndc_y
     );
     
     var out: VertexOutput;
     out.clip_position = vec4<f32>(ndc_x + scaled_offset.x, ndc_y + scaled_offset.y, 0.0, 1.0);
     out.color         = color;
-    out.uv            = in.uv;
+    out.uv            = generated_uv; // Output the exact procedurally generated UV coordinates
     return out;
 }

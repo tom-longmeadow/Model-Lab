@@ -1,7 +1,7 @@
 pub mod aos;
 pub mod soa;
 pub mod pass;
-pub mod renderer;
+pub mod renderer; 
 
 // Re-export ParticleInstance for use by applications
 //pub use aos::ParticleInstance;

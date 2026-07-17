@@ -3,6 +3,7 @@
     engine::scene::{Scene, ball_bounce_particle_aos_verlet::BallBounceParticleAosVerletScene}, 
     graphics_context::config::RendererConfig,  
 };
+use base::math::DVec2;
 
 
 pub struct BallBounceParticleAosVerlet { 
@@ -24,7 +25,7 @@ impl AppLogic for BallBounceParticleAosVerlet {
     }
 
     fn create_scene(&self) -> Box<dyn Scene> { 
-        Box::new(BallBounceParticleAosVerletScene::new())
+        Box::new(BallBounceParticleAosVerletScene::<DVec2>::new())
     }
 }
  
