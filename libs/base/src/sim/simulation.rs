@@ -82,7 +82,7 @@ where
         let subs  = self.environment.substep_count().max(1);
         
         let step_dt = self.clock.fixed_dt();
-        let sub_dt  = step_dt / subs as f64;
+        let sub_step_dt  = step_dt / subs as f64;
         let storage_size: usize = self.storage.len();
 
         let physics_start = std::time::Instant::now();
@@ -91,13 +91,13 @@ where
             let current_tick = tick + step as u64;
 
             self.storage.pre_step();
-            self.lifecycle.tick(&mut self.storage, current_tick, &self.environment);
+            self.lifecycle.tick(&mut self.storage, current_tick, sub_step_dt, &self.environment); // must be sub_step_dt to matck physics
 
-            self.solver.pre_step(&mut self.storage, step_dt, current_tick, &mut self.environment);
+            self.solver.pre_step(&mut self.storage, current_tick, &mut self.environment);
             for _ in 0..subs { 
-                self.solver.sub_step(&mut self.storage, sub_dt, &self.environment);
+                self.solver.sub_step(&mut self.storage, sub_step_dt, &self.environment);
             }
-            self.solver.post_step(&mut self.storage, step_dt, &self.environment);
+            self.solver.post_step(&mut self.storage, &self.environment);
 
             self.storage.post_step();
         }

@@ -11,6 +11,8 @@ impl ParticleSceneConfig{
     {
         60.0 
     }
+ 
+
 
     pub fn environment<V>() -> ParticleEnvironment<V> 
     where 
@@ -18,8 +20,8 @@ impl ParticleSceneConfig{
         V::Scalar: From<f64>, 
         V::Quantized: Eq + Hash, 
     {
-        let substep_count: u64 = 8;
-        let collision_iterations: u64 = 4;
+        let substep_count: u64 = 6;
+        let collision_iterations: u64 = 3;
 
         let particle_radius: V::Scalar = 10.0.into();  
         let cell_size = particle_radius * 1.0.into();  
@@ -39,12 +41,12 @@ impl ParticleSceneConfig{
         V::Scalar: From<f64>, 
         V::Quantized: Eq + Hash, 
     {
-        let max_particles: usize = 400;  
-        let particle_initial_velocity  = V::from_f64_array([4.0, -1.0]);
+        let max_particles: usize = 10000;  
+        let particle_initial_velocity  = V::from_f64_array([2600.0, -800.0]);
         let particle_relative_location = V::from_f64_array([0.2, 0.97]);
         let lifecycle_start_tick: u64 = 20;
-        let lifecycle_ticks_per_spawn: u64 = 3;   
-        let particle_radius: V::Scalar = 10.0.into();  
+        let lifecycle_ticks_per_spawn: u64 = 1;   
+        let particle_radius: V::Scalar = 2.0.into();  
         let particle_colors: &'static [Color] = &Color::RAINBOW;
 
         let stream_config = StreamConfig::<V>::new(

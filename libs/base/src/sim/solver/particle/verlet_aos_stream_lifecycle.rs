@@ -1,6 +1,7 @@
 use crate::{math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, 
-solver::particle::{environment::ParticleEnvironment, verlet_aos_vec_storage::VerletParticleAosVecStorage, 
-    verlet_particle::VerletParticle}, storage::CpuStorage}};
+solver::particle::{environment::ParticleEnvironment, 
+    lifecycle::{tick_stream_lifecycle}, verlet_aos_vec_storage::VerletParticleAosVecStorage}}
+};
  
  
 
@@ -16,21 +17,13 @@ impl<V: Vector> AosStreamLifecycle<V> {
 
 impl<V: Vector> Lifecycle<VerletParticleAosVecStorage<V>, ParticleEnvironment<V>> for AosStreamLifecycle<V> 
 where
-    V: std::ops::Sub<Output = V>, 
+     V: Vector + std::ops::Sub<Output = V> + 'static,  
+    V::Scalar: 'static,
 {
-    fn tick(&mut self, storage: &mut VerletParticleAosVecStorage<V>, tick: u64, environment: &ParticleEnvironment<V>) {
+    fn tick(&mut self, storage: &mut VerletParticleAosVecStorage<V>, tick: u64, step_dt: f64, environment: &ParticleEnvironment<V>) {
         
-        if self.config.should_spawn(tick) {
-            let position = self.config.get_spawn_position(&environment.space.bounds);
-            let color = self.config.get_color();
-             
-            let p = VerletParticle::new(position)
-                .with_velocity(self.config.velocity.clone()) 
-                .with_radius(self.config.radius.clone(), self.config.density.clone()) 
-                .with_color(color);
-             
-            storage.push(p);
-            self.config.particle_count += 1;
-        } 
+        tick_stream_lifecycle(&mut self.config, storage, tick, step_dt, environment); 
     } 
 }
+
+ 

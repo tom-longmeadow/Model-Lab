@@ -2,7 +2,7 @@ pub mod space;
 pub mod runtime;
 pub mod environment;
 pub mod tuning;
-pub mod data_layout;
+pub mod lifecycle;
 
 pub mod verlet_physics;
 pub mod verlet_particle;

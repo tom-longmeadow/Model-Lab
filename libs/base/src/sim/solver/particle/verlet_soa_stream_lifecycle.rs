@@ -1,8 +1,9 @@
 use crate::{math::Vector, sim::{lifecycle::{Lifecycle, stream_config::StreamConfig}, 
-solver::particle::{environment::ParticleEnvironment,
-    verlet_particle::VerletParticle, verlet_soa_vec_storage::VerletParticleSoaVecStorage}, storage::CpuStorage}};
+solver::particle::{environment::ParticleEnvironment, 
+    lifecycle::{tick_stream_lifecycle}, verlet_soa_vec_storage::VerletParticleSoaVecStorage}}
+};
  
- pub struct SoaStreamLifecycle<V: Vector> {
+pub struct SoaStreamLifecycle<V: Vector> {
     pub config: StreamConfig<V>,
 }
 
@@ -14,23 +15,10 @@ impl<V: Vector> SoaStreamLifecycle<V> {
 
 impl<V> Lifecycle<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V>> for SoaStreamLifecycle<V> 
 where
-    V: Vector + 'static,
+    V: Vector + std::ops::Sub<Output = V> + 'static,  
     V::Scalar: 'static,
 {
-    fn tick(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, tick: u64, environment: &ParticleEnvironment<V>) {
-        if self.config.should_spawn(tick) {
-            let position = self.config.get_spawn_position(&environment.space.bounds);
-            let color = self.config.get_color();
-             
-            // Constructs the logical item layout using the builder methods
-            let p = VerletParticle::new(position)
-                .with_velocity(self.config.velocity.clone()) 
-                .with_radius(self.config.radius.clone(), self.config.density.clone()) 
-                .with_color(color);
-             
-            // Appends the entity directly into the columns using our custom SoA vector storage implementation
-            storage.push(p);
-            self.config.particle_count += 1;
-        } 
+    fn tick(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, tick: u64, step_dt: f64, environment: &ParticleEnvironment<V>) {
+        tick_stream_lifecycle(&mut self.config, storage, tick, step_dt, environment); 
     } 
 }

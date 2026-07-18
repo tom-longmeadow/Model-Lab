@@ -11,6 +11,7 @@ use base::{
         storage::CpuStorage
     },  
 };
+use base::math::FloatScalar;
  
 use crate::{
     engine::{input::InputState, scene::{Scene, particle_scene_config::ParticleSceneConfig}},
@@ -52,7 +53,7 @@ where
         let sim = Simulation::new(
             hz,
             <VerletParticleSoaVecStorage<V> as CpuStorage>::new(config.max_particles),
-            VerletSoaGravitySolver::new( config.max_particles),
+            VerletSoaGravitySolver::new( config.max_particles, V::Scalar::ONE ),
             SoaStreamLifecycle::<V>::new(config),
             env,
         );    

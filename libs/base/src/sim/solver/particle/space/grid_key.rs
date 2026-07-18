@@ -7,10 +7,10 @@ pub trait GridKey: Hash + Eq + Copy + std::ops::Add<Output = Self> + 'static {
 
 impl GridKey for IVec2 {
     const OFFSETS: &'static [Self] = &[
-        IVec2::new(1, 0),
-        IVec2::new(-1, 1),
-        IVec2::new(0, 1),
-        IVec2::new(1, 1),
+        IVec2::new(1, 0),  // Right
+        IVec2::new(1, 1),  // Up-Right
+        IVec2::new(0, 1),  // Up
+        IVec2::new(-1, 1), // Up-Left
     ];
 }
 

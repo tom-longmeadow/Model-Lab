@@ -15,12 +15,12 @@ impl<V: Vector> SimulationTuning<V> {
         Self {
             substep_count,  
             collision_iterations, 
-            physics: PhysicsTuning::<V::Scalar>::new(tuning_size, tuning_size, collision_iterations)
+            physics: PhysicsTuning::<V::Scalar>::new(tuning_size, tuning_size)
         }
     }
 
     pub fn update_physics(&mut self, min_size: V::Scalar, max_size: V::Scalar,){
-        self.physics = PhysicsTuning::new(min_size, max_size, self.collision_iterations);
+        self.physics = PhysicsTuning::new(min_size, max_size);
     }
 }
  
@@ -43,48 +43,40 @@ pub struct PhysicsTuning<S: FloatScalar> {
 }
 
 impl<S: FloatScalar> PhysicsTuning<S> { 
-    pub fn new(size_min: S, size_max: S, collision_iterations: u64) -> Self { 
-        let default_restitution = S::from_f64(0.65); 
+    pub fn new(size_min: S, size_max: S) -> Self { 
+        let default_restitution = S::from_f64(0.4); 
         
         Self::with_all(
             size_min, 
             size_max, 
-            default_restitution,
-            collision_iterations,
+            default_restitution, 
         )
     }
 
     pub fn with_all(
         size_min: S, 
         size_max: S,
-        restitution: S,
-        collision_iterations: u64, 
+        restitution: S, 
     ) -> Self {  
-        // Convert configurations and constants using your trait conversion
-        let iterations_f = S::from_f64(collision_iterations as f64); 
-        let slop_coefficient = S::from_f64(0.02);   
-        let bounce_threshold_factor = S::from_f64(2.0);  
-        let global_damping_constant = S::from_f64(0.1);
-        let friction_constant = S::from_f64(0.2);
-        let target_frame_bias = S::from_f64(0.4);  
-        let max_velocity = size_max * S::from_f64(600.0);   
+        let target_frame_bias = S::from_f64(0.4); // Raw continuous target tracking rate
 
         Self {
             restitution,
-            velocity_bounce_threshold: size_min * bounce_threshold_factor,
-            penetration_slop: size_min * slop_coefficient, 
-            penetration_correction_bias: target_frame_bias / iterations_f, 
-            global_damping: global_damping_constant,
-            friction: friction_constant, 
-            max_velocity, 
+            velocity_bounce_threshold: size_min * S::from_f64(2.0),
+            penetration_slop: size_min * S::from_f64(0.02), 
+            // 🟢 FIX: Do not pre-divide by iterations here. Keep it unscaled.
+            penetration_correction_bias: target_frame_bias, 
+            global_damping: S::from_f64(0.1),
+            friction: S::from_f64(0.2), 
+            max_velocity: size_max * S::from_f64(10000.0), 
         }
-    } 
+    }
 }
 
 impl<S: FloatScalar> Default for PhysicsTuning<S> {
     fn default() -> Self {
         let one = S::from_f64(1.0);
-        Self::new(one, one,1)
+        Self::new(one, one)
     }
 }
 

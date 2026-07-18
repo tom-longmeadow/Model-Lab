@@ -3,37 +3,50 @@ use crate::math::{FloatScalar, Vector};
 use crate::sim::solver::Solver; 
 use crate::sim::solver::particle::environment::ParticleEnvironment; 
 use crate::sim::solver::particle::space::collision_registry::CollisionRegistry;
-use crate::sim::solver::particle::verlet_particle::VerletParticleColumns;
-use crate::sim::solver::particle::verlet_physics::{ VerletPhysics};
-use crate::sim::solver::particle::verlet_soa_vec_storage::VerletParticleSoaVecStorage; 
-use crate::sim::storage::{Storage}; 
-use crate::sim::solver::particle::verlet_soa_vec_storage::ErgonomicSoaCpuStorageExt;
-pub struct VerletSoaGravitySolver {  
-    // 🟢 Decoupled registry index pair cache matching the AoS design
-    pub registry: CollisionRegistry,
+use crate::sim::solver::particle::verlet_particle::VerletParticleColumns; 
+use crate::sim::solver::particle::verlet_physics::VerletPhysics;
+use crate::sim::solver::particle::verlet_soa_vec_storage::{ErgonomicSoaCpuStorageExt, VerletParticleSoaVecStorage}; 
+use crate::sim::storage::{Storage};  
+
+use crate::sim::solver::particle::space::grid::UniformGrid;
+
+pub struct VerletSoaGravitySolver<V> 
+where 
+    V: Vector,
+    V::Quantized: Hash + Eq + Copy,
+{  
+    pub grid: UniformGrid<V>,        // 🟢 OWNED INSTANCE: Matches the unified AoS design layout
+    pub registry: CollisionRegistry, 
 }
 
-impl VerletSoaGravitySolver {
-    pub fn new(initial_capacity: usize) -> Self { 
+impl<V> VerletSoaGravitySolver<V>
+where 
+    V: Vector,
+    V::Quantized: Hash + Eq + Copy,
+{
+    pub fn new(initial_capacity: usize, default_cell_size: V::Scalar) -> Self { 
         Self { 
+            grid: UniformGrid::new(default_cell_size),
             registry: CollisionRegistry::with_capacity(initial_capacity), 
         }
     }
 }
 
-impl<V: Vector + 'static> Solver<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V>> for VerletSoaGravitySolver
+impl<V: Vector + 'static> Solver<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V>> for VerletSoaGravitySolver<V>
 where
     V::Quantized: Hash + Eq + Copy,
 {
     fn init(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
 
-    fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, _dt: f64, _tick: u64, environment: &mut ParticleEnvironment<V>) {
+    fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, _tick: u64, environment: &mut ParticleEnvironment<V>) {
         environment.state.update_jitter(_tick);
         
         let len = Storage::len(storage);
         if len == 0 { return; }
 
-        let radii = storage.as_slice(VerletParticleColumns::Radius);
+        // 🟢 FIXED: Grab the raw pointer directly from the columns array to bypass method lookup issues
+        let rad_base = storage.columns[VerletParticleColumns::Radius as usize].ptr.cast::<V::Scalar>();
+        let radii = unsafe { std::slice::from_raw_parts(rad_base, len) };
 
         type S<V> = <V as Vector>::Scalar; 
         let mut min_radius = S::<V>::INFINITY;
@@ -44,72 +57,73 @@ where
             if r > max_radius { max_radius = r; }
         }
 
-        environment.space.grid.set_cell_size(max_radius);  
+        // Base cell size scales off the max collision DIAMETER (2 * radius)
+        let max_diameter = max_radius + max_radius;
+        self.grid.set_cell_size(max_diameter);  
+        
         environment.tuning.update_physics(min_radius, max_radius);
     }
     
-    fn sub_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, dt: f64, environment: &ParticleEnvironment<V>) {
+    fn sub_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, sub_step_dt: f64, environment: &ParticleEnvironment<V>) {
         let len = Storage::len(storage);
         if len == 0 { return; }
 
-        let sub_step_dt = <V::Scalar as FloatScalar>::from_f64(dt);
-        
-        // Extract raw individual scalar components out of the master gravity force vector
-        let gravity_x = environment.gravity.get().component(0);
-        let gravity_y = environment.gravity.get().component(1);
+        let v_dt = V::Scalar::from_f64(sub_step_dt);
+        let gravity_acc = environment.gravity.get();
 
-        // 🟢 FIXED: Unpack the layout into 8 distinct scalar component strided fields!
-        // This completely matches what your VerletPhysics::soa_* workers expect.
-        let (pos_x, pos_y, old_x, old_y, acc_x, acc_y, radii, inv_masses) = 
+        // 🟢 FIXED: Unpack using our updated native vector slice extension trait
+        let (positions, positions_old, accelerations, radii, inv_masses) = 
             storage.get_physics_components_mut::<V>();
 
-        // 1. APPLY FORCE INTEGRATION (Gravity components injected straight into memory lanes)
-        for i in 0..len {
-            unsafe {
-                acc_x.set_unchecked(i, acc_x.get_unchecked(i) + gravity_x);
-                acc_y.set_unchecked(i, acc_y.get_unchecked(i) + gravity_y);
-            }
+        // 1. APPLY FORCE INTEGRATION (Unified vector math removes messy per-component indexing loops)
+        for acc in accelerations.iter_mut() {
+            *acc = gravity_acc;
         }
 
         // 2. EXECUTED PIPELINE DELEGATION
-        unsafe {
-            // A. Updated Kinetics pass (Takes 8 arguments)
-            VerletPhysics::soa_update_kinetics(
-                &pos_x, &pos_y, 
-                &old_x, &old_y, 
-                &acc_x, &acc_y, 
-                sub_step_dt, environment
-            );
+        // A. Update positions and velocities via our clean, non-aliasing contiguous array lanes
+        VerletPhysics::soa_update_kinetics(
+            positions, 
+            positions_old, 
+            accelerations, 
+            v_dt, 
+            environment
+        );
 
-            // B. Narrowphase spatial grid collision checks (Takes 7 arguments)
-            VerletPhysics::soa_detect_and_resolve_collisions(
-                &environment.space.grid, 
-                &pos_x, &pos_y, 
+        // 🟢 FIXED: Populate the grid directly using native types. No array reconstruction or f64 conversions!
+        self.grid.clear();
+        let cached_cell_size = self.grid.cell_size;
+
+        for (i, &pos) in positions.iter().enumerate() {
+            let cell_key = pos.quantize_into(cached_cell_size);
+            self.grid.insert(cell_key, i);
+        }
+
+        // 🏎️ CRITICAL FIX: Match the signature of your new merged spatial direct solver.
+        // This does the work of both old B & C steps combined!
+        unsafe {
+            self.grid.soa_resolve_collisions_spatial_direct(
+                positions, 
+                positions_old, 
                 inv_masses, 
                 radii, 
-                &mut self.registry, 
+                v_dt,
                 environment
             );
-
-            // C. Bounded wall limits and containment boundaries (Takes 7 arguments)
-            VerletPhysics::soa_apply_position_constraints(
-                &pos_x, &pos_y, 
-                &old_x, &old_y, 
-                radii, 
-                sub_step_dt, environment
-            );
-
-            // D. Restitution bounce history register writes (Takes 8 arguments)
-            VerletPhysics::soa_apply_particle_restitution(
-                &self.registry, 
-                &pos_x, &pos_y, 
-                &old_x, &old_y, 
-                inv_masses, 
-                radii, environment
-            );
         }
+
+        // D. Bounded wall limits and containment boundaries
+        VerletPhysics::soa_apply_position_constraints(
+            positions, 
+            positions_old, 
+            radii, 
+            v_dt, 
+            environment
+        );
+
+        // ⚠️ ATTENTION: Step E requires an approach adjustment (See below)
     }
+ 
     
-    fn post_step(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>, _dt: f64, _environment: &ParticleEnvironment<V>) { }
+    fn post_step(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>,  _environment: &ParticleEnvironment<V>) { }
 }
-  

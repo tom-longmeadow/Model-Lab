@@ -45,9 +45,10 @@ where
     }
 
     #[inline]
-    pub fn with_velocity(mut self, vel: V) -> Self {
-        // Correctly uses your Vector trait Sub optimization bound
-        self.pos_old = self.pos - vel;
+    pub fn with_velocity(mut self, vel: V, step_dt: f64) -> Self {
+        let v_dt = V::Scalar::from_f64(step_dt); 
+        self.pos_old = self.pos - (vel * v_dt);
+        
         self
     }
 
@@ -84,3 +85,4 @@ where
         VerletParticle::new(V::ZERO)
     }
 }
+
