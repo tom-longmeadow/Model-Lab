@@ -1,6 +1,5 @@
- pub mod ball_bounce_particle_aos_verlet;
- pub mod ball_bounce_particle_soa_verlet;
- pub mod particle_scene_config;
+pub mod ball_bounce;
+pub mod water_fountain;
 
 use crate::{
     engine::input::InputState, 

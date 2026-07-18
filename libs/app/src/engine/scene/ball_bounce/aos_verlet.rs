@@ -5,14 +5,13 @@ use base::{math::Vector,
         simulation::Simulation, 
         solver::particle::{ 
         verlet_aos_gravity_solver::VerletAosGravitySolver, 
-        verlet_aos_stream_lifecycle::AosStreamLifecycle, 
         verlet_aos_vec_storage::VerletParticleAosVecStorage, 
         verlet_particle::VerletParticle}, storage::CpuStorage
     }
 };
  
 use crate::{
-    engine::{input::InputState, scene::{Scene, particle_scene_config::ParticleSceneConfig}},
+    engine::{input::InputState, scene::{Scene, ball_bounce::{scene_config::BallBounceSceneConfig, verlet_aos_stream_lifecycle::BallBounceAosStreamLifecycle}}},
     graphics_context::{
         GraphicsContext,
         pass::hud::{HudPass, HudState},
@@ -48,15 +47,15 @@ where
             return;
         }
  
-        let hz = ParticleSceneConfig::hz();
-        let env = ParticleSceneConfig::environment();
-        let config = ParticleSceneConfig::config();
+        let hz = BallBounceSceneConfig::hz();
+        let env = BallBounceSceneConfig::environment();
+        let config = BallBounceSceneConfig::config();
  
         let sim = Simulation::new(
             hz,
             <VerletParticleAosVecStorage<V> as CpuStorage>::new(config.max_particles),
             VerletAosGravitySolver::new( config.max_particles, V::Scalar::ONE ),
-            AosStreamLifecycle::<V>::new(config),
+            BallBounceAosStreamLifecycle::<V>::new(config),
             env,
         );   
 

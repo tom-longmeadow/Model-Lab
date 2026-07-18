@@ -6,7 +6,7 @@ use base::{
         simulation::Simulation, 
         solver::particle::{
             verlet_particle::VerletParticle, verlet_soa_gravity_solver::VerletSoaGravitySolver, 
-            verlet_soa_stream_lifecycle::SoaStreamLifecycle, verlet_soa_vec_storage::VerletParticleSoaVecStorage 
+            verlet_soa_vec_storage::VerletParticleSoaVecStorage 
         }, 
         storage::CpuStorage
     },  
@@ -14,7 +14,7 @@ use base::{
 use base::math::FloatScalar;
  
 use crate::{
-    engine::{input::InputState, scene::{Scene, particle_scene_config::ParticleSceneConfig}},
+    engine::{input::InputState, scene::{Scene, ball_bounce::{scene_config::BallBounceSceneConfig, verlet_soa_stream_lifecycle::BallBounceSoaStreamLifecycle}, }},
     graphics_context::{
         GraphicsContext,
         pass::hud::{HudPass, HudState}, simulation::{pass::SimulationPass, renderer::SimulationRenderer, soa::SoaSimulationRenderer}, 
@@ -47,14 +47,14 @@ where
             return;
         }
 
-        let hz = ParticleSceneConfig::hz();
-        let env = ParticleSceneConfig::environment();
-        let config = ParticleSceneConfig::config();
+        let hz = BallBounceSceneConfig::hz();
+        let env = BallBounceSceneConfig::environment();
+        let config = BallBounceSceneConfig::config();
         let sim = Simulation::new(
             hz,
             <VerletParticleSoaVecStorage<V> as CpuStorage>::new(config.max_particles),
-            VerletSoaGravitySolver::new( config.max_particles, V::Scalar::ONE ),
-            SoaStreamLifecycle::<V>::new(config),
+            VerletSoaGravitySolver::new( config.max_particles, V::Scalar::ONE , false),
+            BallBounceSoaStreamLifecycle::<V>::new(config),
             env,
         );    
         let particle_renderer = SoaSimulationRenderer::<VerletParticle<V>>::new();   

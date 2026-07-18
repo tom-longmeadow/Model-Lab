@@ -37,7 +37,7 @@ where
 {
     fn init(&mut self, _storage: &mut VerletParticleAosVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
 
-    fn pre_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, _tick: u64, environment: &mut ParticleEnvironment<V>) {
+    fn pre_step(&mut self, storage: &mut VerletParticleAosVecStorage<V>, _tick: u64, _step_dt:f64,environment: &mut ParticleEnvironment<V>) {
         environment.state.update_jitter(_tick);
         
         let particles = storage.as_slice();

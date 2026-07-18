@@ -1,10 +1,10 @@
 [package]
-name = "soa_verlet_ball_bounce"
+name = "ball_bounce_aos_verlet"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "soa_verlet_ball_bounce"
+name = "ball_bounce_aos_verlet"
 path = "src/bin/ball_bounce.rs"
 
 [dependencies]

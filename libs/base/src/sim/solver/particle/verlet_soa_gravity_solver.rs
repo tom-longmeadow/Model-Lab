@@ -9,6 +9,7 @@ use crate::sim::solver::particle::verlet_soa_vec_storage::{ErgonomicSoaCpuStorag
 use crate::sim::storage::{Storage};  
 
 use crate::sim::solver::particle::space::grid::UniformGrid;
+use crate::ui::layout::color::Color;
 
 pub struct VerletSoaGravitySolver<V> 
 where 
@@ -17,6 +18,7 @@ where
 {  
     pub grid: UniformGrid<V>,        // 🟢 OWNED INSTANCE: Matches the unified AoS design layout
     pub registry: CollisionRegistry, 
+    pub color_by_velocity: bool
 }
 
 impl<V> VerletSoaGravitySolver<V>
@@ -24,10 +26,12 @@ where
     V: Vector,
     V::Quantized: Hash + Eq + Copy,
 {
-    pub fn new(initial_capacity: usize, default_cell_size: V::Scalar) -> Self { 
+    pub fn new(initial_capacity: usize, default_cell_size: V::Scalar, color_by_velocity: bool) -> Self { 
         Self { 
             grid: UniformGrid::new(default_cell_size),
             registry: CollisionRegistry::with_capacity(initial_capacity), 
+            color_by_velocity
+
         }
     }
 }
@@ -38,13 +42,53 @@ where
 {
     fn init(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
 
-    fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, _tick: u64, environment: &mut ParticleEnvironment<V>) {
+    fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, _tick: u64, step_dt:f64, environment: &mut ParticleEnvironment<V>) {
         environment.state.update_jitter(_tick);
         
         let len = Storage::len(storage);
         if len == 0 { return; }
 
-        // 🟢 FIXED: Grab the raw pointer directly from the columns array to bypass method lookup issues
+        
+        
+
+        if self.color_by_velocity{
+             
+            let pos_base = storage.columns[VerletParticleColumns::Pos as usize].ptr.cast::<V>();
+            let pos = unsafe { std::slice::from_raw_parts(pos_base, len) };
+
+            let old_base = storage.columns[VerletParticleColumns::PosOld as usize].ptr.cast::<V>();
+            let old = unsafe { std::slice::from_raw_parts(old_base, len) };
+
+            // 1. Cast to a mutable pointer (*mut Color)
+            let color_base = storage.columns[VerletParticleColumns::Color as usize].ptr.cast::<Color>();
+            // 2. Use from_raw_parts_mut to get a mutable slice reference (&mut [Color])
+            let color = unsafe { std::slice::from_raw_parts_mut(color_base, len) };
+    
+              
+            let min_speed_threshold = 0.0_f64;   // Anything moving slower than this is "still" (Dark Blue)
+            let max_expected_speed = 160.0_f64;  // Your cap for Foam White
+
+            for i in 0..len {
+                let p = pos[i];
+                let p_old = old[i];
+                
+                let velocity = p - p_old;
+                let speed = velocity.length().to_f64().abs() / step_dt;
+                
+                // 1. Subtract the threshold to clear out the micro-jitter
+                let adjusted_speed = (speed - min_speed_threshold).max(0.0);
+                
+                // 2. Map the remaining range smoothly from [0.0, max - min]
+                let speed_range = max_expected_speed - min_speed_threshold;
+                let percentage = (adjusted_speed / speed_range).clamp(0.0, 1.0) as f32;
+
+                let c = Color::get_color_at_percentage(&Color::WATER, percentage);
+                
+                color[i] = c; 
+            }
+        }
+        
+
         let rad_base = storage.columns[VerletParticleColumns::Radius as usize].ptr.cast::<V::Scalar>();
         let radii = unsafe { std::slice::from_raw_parts(rad_base, len) };
 

@@ -93,7 +93,7 @@ where
             self.storage.pre_step();
             self.lifecycle.tick(&mut self.storage, current_tick, sub_step_dt, &self.environment); // must be sub_step_dt to matck physics
 
-            self.solver.pre_step(&mut self.storage, current_tick, &mut self.environment);
+            self.solver.pre_step(&mut self.storage, current_tick, step_dt, &mut self.environment);
             for _ in 0..subs { 
                 self.solver.sub_step(&mut self.storage, sub_step_dt, &self.environment);
             }

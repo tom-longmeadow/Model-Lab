@@ -1,11 +1,11 @@
 [package]
-name = "aos_verlet_ball_bounce"
+name = "water_fountain_soa_verlet"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "aos_verlet_ball_bounce"
-path = "src/bin/ball_bounce.rs"
+name = "water_fountain_soa_verlet"
+path = "src/bin/water_fountain.rs"
 
 [dependencies]
 base = { workspace = true }   

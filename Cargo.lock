@@ -81,19 +81,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aos_verlet_ball_bounce"
-version = "0.1.0"
-dependencies = [
- "app",
- "base",
- "pollster",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "winit",
-]
-
-[[package]]
 name = "app"
 version = "0.1.0"
 dependencies = [
@@ -146,6 +133,32 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
+
+[[package]]
+name = "ball_bounce_aos_verlet"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
+]
+
+[[package]]
+name = "ball_bounce_soa_verlet"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
+]
 
 [[package]]
 name = "base"
@@ -1865,19 +1878,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aaa7368fcf4852a4c2dd92df0cace6a71f2091ca0a23391ce7f3a31833f1523"
 
 [[package]]
-name = "soa_verlet_ball_bounce"
-version = "0.1.0"
-dependencies = [
- "app",
- "base",
- "pollster",
- "tracing",
- "tracing-subscriber",
- "tracing-wasm",
- "winit",
-]
-
-[[package]]
 name = "spirv"
 version = "0.4.0+sdk-1.4.341.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2258,6 +2258,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fd04d9e306f1907bd13c6361b5c6bfc7b3b3c095ed3f8a9246390f8dbdee129"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "water_fountain_soa_verlet"
+version = "0.1.0"
+dependencies = [
+ "app",
+ "base",
+ "pollster",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
+ "winit",
 ]
 
 [[package]]

@@ -40,7 +40,8 @@ impl Color {
         Color { r: 139, g: 0,   b: 255, a: 255 }, // Vibrant Purple / Violet
     ];
 
-    pub const WATER: [Color; 6] = [
+    pub const WATER: [Color; 7] = [
+        Color { r: 0,   g: 9,  b: 38,  a: 255 }, // Navy Blue (Depth) 
         Color { r: 0,   g: 32,  b: 96,  a: 255 }, // Deep Ocean Blue (Depth)
         Color { r: 0,   g: 96,  b: 192, a: 255 }, // Classic Water Blue
         Color { r: 0,   g: 160, b: 224, a: 255 }, // Bright Tropical Blue
@@ -48,6 +49,8 @@ impl Color {
         Color { r: 192, g: 240, b: 255, a: 255 }, // Shallow Aqua / Spray
         Color { r: 255, g: 255, b: 255, a: 255 }, // Foam White (Highlight/Collisions)
     ];
+
+  
 
 
 
