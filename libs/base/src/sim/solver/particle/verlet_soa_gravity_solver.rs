@@ -10,7 +10,7 @@ use crate::sim::solver::particle::physics::verlet_soa_prestep::VerletSoaPrestep;
 use crate::sim::solver::particle::space::collision_registry::CollisionRegistry;
 use crate::sim::solver::particle::space::grid_key::GridKey;
 use crate::sim::solver::particle::verlet_soa_vec_storage::{ 
-    AccField, SoaColor, SoaInvMass, SoaPos, SoaPosOld, SoaRadius, VerletParticleSoaVecStorage};
+    AccField,  SoaInvMass, SoaPos, SoaPosOld, SoaRadius, VerletParticleSoaVecStorage};
 use crate::sim::storage::Storage; 
  
 

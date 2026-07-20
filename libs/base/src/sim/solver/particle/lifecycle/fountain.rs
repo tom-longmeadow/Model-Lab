@@ -38,7 +38,7 @@ where
 
      
         if self.stream.should_emit(tick) {
-            let burst_count = self.stream.droplets_per_burst;
+            let burst_count = 12;
             
             // Core structural spacing parameters
             let spacing_factor = V::Scalar::from_f64(2.2);

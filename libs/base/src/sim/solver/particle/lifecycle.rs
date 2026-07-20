@@ -9,8 +9,7 @@ use crate::{aabb::AABB, math::Vector};
 pub struct Stream<V: Vector> {
     // Timing Gates
     start_tick: u64,
-    ticks_per_spawn: u64,
-    droplets_per_burst: usize,
+    ticks_per_spawn: u64, 
     
     // Core Particle Footprint Configurations
     relative_position: V,
@@ -26,8 +25,7 @@ impl<V: Vector> Stream<V> {
     #[inline]
     pub fn new(
         start_tick: u64,
-        ticks_per_spawn: u64,
-        droplets_per_burst: usize,
+        ticks_per_spawn: u64, 
         relative_position: V,
         velocity: V,
         radius: V::Scalar,
@@ -35,8 +33,7 @@ impl<V: Vector> Stream<V> {
     ) -> Self {
         Self {
             start_tick,
-            ticks_per_spawn,
-            droplets_per_burst,
+            ticks_per_spawn, 
             relative_position,
             velocity,
             radius,

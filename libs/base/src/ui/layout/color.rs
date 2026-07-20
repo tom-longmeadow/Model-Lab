@@ -94,7 +94,7 @@ impl Color {
    
     // Blend two u8 colors together by a percentage float (t is 0.0 to 1.0)
     #[inline]
-    fn blend_colors(c1: &Color, c2: &Color, t: f32) -> Color {
+    fn blend_colors(c1: &Color, c2: &Color, t: f64) -> Color {
         // 1 - t is pre-calculated to reuse across all channels
         let one_minus_t = 1.0 - t;
 
@@ -102,16 +102,16 @@ impl Color {
         // Truncating with `as u8` is significantly faster than `.round()` 
         // and visually indistinguishable for fast-moving particles.
         Color {
-            r: (c1.r as f32 * one_minus_t + c2.r as f32 * t) as u8,
-            g: (c1.g as f32 * one_minus_t + c2.g as f32 * t) as u8,
-            b: (c1.b as f32 * one_minus_t + c2.b as f32 * t) as u8,
-            a: (c1.a as f32 * one_minus_t + c2.a as f32 * t) as u8,
+            r: (c1.r as f64 * one_minus_t + c2.r as f64 * t) as u8,
+            g: (c1.g as f64 * one_minus_t + c2.g as f64 * t) as u8,
+            b: (c1.b as f64 * one_minus_t + c2.b as f64 * t) as u8,
+            a: (c1.a as f64 * one_minus_t + c2.a as f64 * t) as u8,
         }
     }
 
     // Get the blended color at any specific percentage (0.0 to 1.0) along the Vec
     #[inline]
-    pub fn get_color_at_percentage(colors: &[Color], percentage: f32) -> Color {
+    pub fn get_color_at_percentage(colors: &[Color], percentage: f64) -> Color {
         let count = colors.len();
         
         // Handle edge cases safely
@@ -119,11 +119,11 @@ impl Color {
         if count == 1 { return colors[0]; }
   
         let p = percentage.clamp(0.0, 1.0);
-        let scaled_p = p * (count - 1) as f32;
+        let scaled_p = p * (count - 1) as f64;
 
         // Clamp the index to the second-to-last element to handle p = 1.0 safely
         let index = (scaled_p.floor() as usize).min(count - 2);
-        let t = (scaled_p - index as f32).clamp(0.0, 1.0);
+        let t = (scaled_p - index as f64).clamp(0.0, 1.0);
 
         Self::blend_colors(&colors[index], &colors[index + 1], t) 
     }

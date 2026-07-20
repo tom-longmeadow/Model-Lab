@@ -66,9 +66,9 @@ impl<S: FloatScalar> PhysicsTuning<S> {
             velocity_bounce_threshold: min_size * S::from_f64(2.0),
             penetration_slop: min_size * S::from_f64(0.02), 
             penetration_correction_bias: S::from_f64(0.4),
-            global_damping: S::from_f64(0.1),
+            global_damping: S::from_f64(0.15),
             friction,
-             max_velocity: max_size * S::from_f64(10000.0), 
+             max_velocity: max_size * S::from_f64(6000.0), 
         }
     }
  

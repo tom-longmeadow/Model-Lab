@@ -1,18 +1,64 @@
-use crate::{math::{Vector, FloatScalar}, 
+use crate::{math::{FloatScalar, Vector}, 
 sim::{lifecycle::ElementLifecycle, 
-    solver::particle::{environment::ParticleEnvironment, flags::CollisionFlags, 
-        lifecycle::Stream, verlet_particle::VerletParticle}, storage::ElementStorage}};
-
+    solver::particle::{environment::{GravityModel, ParticleEnvironment}, 
+    flags::{CollisionFlags, FluidCollisionFlags}, lifecycle::Stream, 
+    space::{GridSpace, grid_key::GridKey}, state::State, tuning::SimulationTuning, 
+    verlet_particle::VerletParticle}, storage::ElementStorage}, ui::layout::color::Color};
+use std::{env, hash::Hash};
 
 pub struct BallLifecycle<V: Vector> {
     pub stream: Stream<V>,
 }
  
 
-impl<V: Vector> BallLifecycle<V> { 
+impl<V: Vector + 'static> BallLifecycle<V> 
+where
+    V::Scalar: FloatScalar + 'static, // Synced to use FloatScalar tools cleanly
+     V::Quantized: Hash + Eq + Copy + GridKey,
+{ 
+
     #[inline]
-    pub fn new(stream: Stream<V>) -> Self {
+    pub fn new() -> Self {
+         let stream = Stream::new(
+            20,                                      // start_tick
+            1,                                       // ticks_per_spawn 
+            V::from_f64_array([0.2, 0.95]),           // relative_position
+            V::from_f64_array([3500.0, -900.0]),        // velocity
+            V::Scalar::from_f64(10.0),                // radius
+            V::Scalar::from_f64(1.0),                // density
+        );
+
         Self { stream }
+    }
+
+    pub fn environment() -> ParticleEnvironment<V, FluidCollisionFlags> {
+        // --- 1. CLOCK & ITERATION SETTINGS ---
+        let substep_count: u64 = 8;
+        let collision_iterations: u64 = 2;
+        let max_particles: usize = 600;  
+         
+        // --- 2. PHYSICS SIZING & MATERIAL CONSTRAINTS ---
+        let cell_size = V::Scalar::from_f64(0.0);
+        let gravity_force = V::from_f64_array([0.0, -2000.0]);
+
+        let space = GridSpace::new(cell_size);
+        
+        // --- 3. HARDWARE SPEED CONST TUNING CONFIGURATIONS ---
+        let tuning = SimulationTuning::new(
+            60.0,
+            substep_count, 
+            collision_iterations, 
+            max_particles,
+            cell_size, 
+            V::Scalar::from_f64(0.6), 
+            V::Scalar::from_f64(0.4)
+        );
+         
+        // --- 4. ENGINE RUNTIME VISUALIZATION ASSETS ---
+        let state = State::new(&Color::RAINBOW);
+        let gravity = GravityModel::Constant(gravity_force); 
+        
+        ParticleEnvironment::new(space, tuning, state, gravity)
     }
 }
 
@@ -35,12 +81,13 @@ where
  
         let bounds = &environment.space.bounds;  
         let v_dt = V::Scalar::from_f64(dt);
+        let len = storage.len(); 
 
+        let burst_count = 1;
+        let max = environment.tuning.max_particles - burst_count;
      
-        if self.stream.should_emit(tick) {
- 
-           
-            
+        if self.stream.should_emit(tick) && len <= max  {
+  
             // Extract base trajectory profiles
             let base_pos = self.stream.get_position(bounds);
             let spawned_vel = self.stream.velocity.clone();
@@ -50,7 +97,7 @@ where
             let spawned_pos = base_pos.clone();// + horizontal_shift - vertical_shift;
             let spawned_pos_old = spawned_pos.clone() - (spawned_vel.clone() * v_dt.clone());
           
-            let percent: f64 = environment.tuning.max_particles as f64 / storage.len() as f64;
+            let percent: f64 = storage.len() as f64 / environment.tuning.max_particles as f64;
             let color = environment.state.get_color(percent);
 
             // Construct full structural particle context

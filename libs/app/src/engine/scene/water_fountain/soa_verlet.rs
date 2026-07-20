@@ -94,8 +94,7 @@ where
         // 🚀 FIXED: Synced argument positions to match your constructor definition perfectly
         let stream = Stream::new(
             20,                                      // start_tick
-            2,                                       // ticks_per_spawn
-            12,                                      // droplets_per_burst (4 wide x 3 high)
+            2,                                       // ticks_per_spawn 
             V::from_f64_array([0.5, 0.0]),           // relative_position
             V::from_f64_array([0.0, 1700.0]),        // velocity
             V::Scalar::from_f64(2.0),                // radius

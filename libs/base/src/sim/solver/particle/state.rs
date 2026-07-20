@@ -23,7 +23,7 @@ impl<V: Vector> State<V> {
         if self.colors.is_empty() {
             return Color::WHITE; 
         }
-        Color::get_color_at_percentage(self.colors, percent as f32)
+        Color::get_color_at_percentage(self.colors, percent)
     }
 
     /// Call this once per frame before processing particle constraints.

@@ -37,44 +37,9 @@ where
             hud_state: Arc::new(Mutex::new(HudState::default())),
             _marker: PhantomData,
         }
-    } 
-
-    pub fn environment() -> ParticleEnvironment<V, FluidCollisionFlags> {
-        // --- 1. CLOCK & ITERATION SETTINGS ---
-        let substep_count: u64 = 8;
-        let collision_iterations: u64 = 2;
-        let max_particles: usize = 600;  
-         
-        // --- 2. PHYSICS SIZING & MATERIAL CONSTRAINTS ---
-        let cell_size = V::Scalar::from_f64(0.0);
-        let gravity_force = V::from_f64_array([0.0, -1600.0]);
-
-        let space = GridSpace::new(cell_size);
-        
-        // --- 3. HARDWARE SPEED CONST TUNING CONFIGURATIONS ---
-        let tuning = SimulationTuning::new(
-            60.0,
-            substep_count, 
-            collision_iterations, 
-            max_particles,
-            cell_size, 
-            V::Scalar::from_f64(0.3), 
-            V::Scalar::from_f64(0.5)
-        );
-         
-        // --- 4. ENGINE RUNTIME VISUALIZATION ASSETS ---
-        let state = State::new(&Color::RAINBOW);
-        let gravity = GravityModel::Constant(gravity_force); 
-        
-        ParticleEnvironment::new(space, tuning, state, gravity)
-    }
+    }  
 }
  
-
-// =========================================================================
-// SCENE TRAIT ORCHESTRATION PIPELINE DEFINITIONS
-// =========================================================================
-
 impl<V: Vector + 'static> Scene for BallBounceParticleSoaVerletScene<V> 
 where
     V::Scalar: FloatScalar + 'static,  
@@ -88,29 +53,13 @@ where
         }
 
           
-        let env = BallBounceParticleSoaVerletScene::<V>::environment(); 
-         
-         
-         
-        let stream = Stream::new(
-            20,                                      // start_tick
-            2,                                       // ticks_per_spawn
-            1,                                      // droplets_per_burst (4 wide x 3 high)
-            V::from_f64_array([0.2, 0.9]),           // relative_position
-            V::from_f64_array([2000.0, 0.0]),        // velocity
-            V::Scalar::from_f64(10.0),                // radius
-            V::Scalar::from_f64(1.0),                // density
-        );
-
+        let env = BallLifecycle::<V>::environment(); 
         
-
-        // 🟢 COMPILES FLAWLESSLY:
-        // Changed CpuStorage::new invocation to direct struct instantiation pattern to match WaterFountain
         let sim = Simulation::new(
-           env.tuning.hz,
+            env.tuning.hz,
             VerletParticleSoaVecStorage::<V>::new(env.tuning.max_particles),
             VerletSoaGravitySolver::new(),
-            BallLifecycle::new(stream),
+            BallLifecycle::new(),
             env,
         );    
         
