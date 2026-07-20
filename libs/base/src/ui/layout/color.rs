@@ -40,17 +40,25 @@ impl Color {
         Color { r: 139, g: 0,   b: 255, a: 255 }, // Vibrant Purple / Violet
     ];
 
-    pub const WATER: [Color; 7] = [
-        Color { r: 0,   g: 9,  b: 38,  a: 255 }, // Navy Blue (Depth) 
-        Color { r: 0,   g: 32,  b: 96,  a: 255 }, // Deep Ocean Blue (Depth)
-        Color { r: 0,   g: 96,  b: 192, a: 255 }, // Classic Water Blue
-        Color { r: 0,   g: 160, b: 224, a: 255 }, // Bright Tropical Blue
-        Color { r: 64,  g: 224, b: 208, a: 255 }, // Vibrant Turquoise / Cyan
+    pub const WATER_OCEANIC: [Color; 7] = [
+        Color { r: 10,  g: 35,  b: 75,  a: 255 }, // Saturated Midnight Blue (Lifted shadow)
+        Color { r: 0,   g: 64,  b: 128, a: 255 }, // Deep Sapphire
+        Color { r: 0,   g: 110, b: 180, a: 255 }, // Classic Clear Water
+        Color { r: 0,   g: 150, b: 210, a: 255 }, // Electric Cyan
+        Color { r: 64,  g: 224, b: 208, a: 255 }, // Vibrant Turquoise (Kept your excellent choice)
         Color { r: 192, g: 240, b: 255, a: 255 }, // Shallow Aqua / Spray
-        Color { r: 255, g: 255, b: 255, a: 255 }, // Foam White (Highlight/Collisions)
+        Color { r: 255, g: 255, b: 255, a: 255 }, // Foam White
     ];
 
-  
+    pub const WATER_TROPICAL: [Color; 7] = [
+        Color { r: 0,   g: 55,  b: 120, a: 255 }, // Strong Ocean Blue (No muddy blacks)
+        Color { r: 0,   g: 96,  b: 192, a: 255 }, // Classic Water Blue
+        Color { r: 0,   g: 145, b: 220, a: 255 }, // Bright Tropical Blue
+        Color { r: 30,  g: 190, b: 230, a: 255 }, // Vivid Sky Blue
+        Color { r: 75,  g: 230, b: 215, a: 255 }, // Vibrant Turquoise
+        Color { r: 200, g: 245, b: 255, a: 255 }, // Shallow Aqua / Spray
+        Color { r: 255, g: 255, b: 255, a: 255 }, // Foam White
+    ];
 
 
 
@@ -85,42 +93,39 @@ impl Color {
 
    
     // Blend two u8 colors together by a percentage float (t is 0.0 to 1.0)
+    #[inline]
     fn blend_colors(c1: &Color, c2: &Color, t: f32) -> Color {
-        let lerp_channel = |start: u8, end: u8| -> u8 {
-            let start_f = start as f32;
-            let end_f = end as f32;
-            (start_f + (end_f - start_f) * t).round() as u8
-        };
+        // 1 - t is pre-calculated to reuse across all channels
+        let one_minus_t = 1.0 - t;
 
+        // Direct linear interpolation using float math. 
+        // Truncating with `as u8` is significantly faster than `.round()` 
+        // and visually indistinguishable for fast-moving particles.
         Color {
-            r: lerp_channel(c1.r, c2.r),
-            g: lerp_channel(c1.g, c2.g),
-            b: lerp_channel(c1.b, c2.b),
-            a: lerp_channel(c1.a, c2.a),
+            r: (c1.r as f32 * one_minus_t + c2.r as f32 * t) as u8,
+            g: (c1.g as f32 * one_minus_t + c2.g as f32 * t) as u8,
+            b: (c1.b as f32 * one_minus_t + c2.b as f32 * t) as u8,
+            a: (c1.a as f32 * one_minus_t + c2.a as f32 * t) as u8,
         }
     }
 
     // Get the blended color at any specific percentage (0.0 to 1.0) along the Vec
+    #[inline]
     pub fn get_color_at_percentage(colors: &[Color], percentage: f32) -> Color {
         let count = colors.len();
         
         // Handle edge cases safely
         if count == 0 { return Color::default(); }
         if count == 1 { return colors[0]; }
-        
+  
         let p = percentage.clamp(0.0, 1.0);
-
-        // Scale percentage to the gradient segments
         let scaled_p = p * (count - 1) as f32;
-        let index = scaled_p.floor() as usize;
-        let t = scaled_p - index as f32; // Fractional part between the two colors
 
-        // Handle the exact 1.0 boundary cleanly
-        if index >= count - 1 {
-            return colors[count - 1];
-        }
+        // Clamp the index to the second-to-last element to handle p = 1.0 safely
+        let index = (scaled_p.floor() as usize).min(count - 2);
+        let t = (scaled_p - index as f32).clamp(0.0, 1.0);
 
-        Self::blend_colors(&colors[index], &colors[index + 1], t)
+        Self::blend_colors(&colors[index], &colors[index + 1], t) 
     }
 
 

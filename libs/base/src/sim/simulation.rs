@@ -95,7 +95,7 @@ where
 
             self.solver.pre_step(&mut self.storage, current_tick, step_dt, &mut self.environment);
             for _ in 0..subs { 
-                self.solver.sub_step(&mut self.storage, sub_step_dt, &self.environment);
+                self.solver.sub_step(&mut self.storage, sub_step_dt, &mut self.environment);
             }
             self.solver.post_step(&mut self.storage, &self.environment);
 

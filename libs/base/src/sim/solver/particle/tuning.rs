@@ -1,25 +1,47 @@
 
-use crate::math::{FloatScalar, Vector};
+use crate::{math::{FloatScalar, Vector}, sim::solver::particle::flags::{CollisionFlags}};
+ use std::marker::PhantomData;
  
-pub struct SimulationTuning<V> 
+
+pub struct SimulationTuning<V, F> 
 where 
-    V: Vector 
+    V: Vector,
+    F: CollisionFlags,
 {
+    pub hz: f64,
     pub substep_count: u64,
     pub collision_iterations: u64, 
+    pub max_particles: usize,
     pub physics: PhysicsTuning<V::Scalar>, 
+    pub _flags: PhantomData<F>, 
 }
 
-impl<V: Vector> SimulationTuning<V> {
-    pub fn new(substep_count: u64, collision_iterations: u64, tuning_size: V::Scalar, restitution: V::Scalar) -> Self {
+impl<V: Vector, F: CollisionFlags> SimulationTuning<V, F> {
+    /// Creates a new simulation tuning configuration. 
+    /// The static collision flag behavior is inferred automatically from the type signature.
+    pub fn new(
+        hz: f64, 
+        substep_count: u64, 
+        collision_iterations: u64, 
+        max_particles: usize,
+        tuning_size: V::Scalar, 
+        restitution: V::Scalar, 
+        friction: V::Scalar
+    ) -> Self {
         Self {
+            hz,
             substep_count,  
             collision_iterations, 
-            physics: PhysicsTuning::<V::Scalar>::new(tuning_size, tuning_size, restitution)
+            max_particles,
+            physics: PhysicsTuning::<V::Scalar>::new(tuning_size, tuning_size, restitution, friction),
+            // Automatically initialize the zero-sized static type tag
+            _flags: PhantomData, 
         }
     }
 
-    pub fn update_physics(&mut self, min_size: V::Scalar, max_size: V::Scalar,){
+    /// Updates dynamic physical traits inside the underlying physics block.
+    #[inline(always)]
+    pub fn update_physics(&mut self, min_size: V::Scalar, max_size: V::Scalar) {
         self.physics.update(min_size, max_size);
     }
 }
@@ -38,14 +60,14 @@ pub struct PhysicsTuning<S: FloatScalar> {
  
 impl<S: FloatScalar> PhysicsTuning<S> {
     
-    pub fn new(min_size: S, max_size: S, restitution: S) -> Self {
+    pub fn new(min_size: S, max_size: S, restitution: S, friction: S) -> Self {
         Self { 
             restitution,
             velocity_bounce_threshold: min_size * S::from_f64(2.0),
             penetration_slop: min_size * S::from_f64(0.02), 
             penetration_correction_bias: S::from_f64(0.4),
             global_damping: S::from_f64(0.1),
-            friction: S::from_f64(0.2),
+            friction,
              max_velocity: max_size * S::from_f64(10000.0), 
         }
     }
@@ -61,7 +83,7 @@ impl<S: FloatScalar> PhysicsTuning<S> {
 impl<S: FloatScalar> Default for PhysicsTuning<S> {
     fn default() -> Self {
         let one = S::from_f64(1.0);
-        Self::new(one, one, one)
+        Self::new(one, one, one, one)
     }
 }
 

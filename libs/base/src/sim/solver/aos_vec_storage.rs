@@ -1,53 +1,69 @@
-use crate::sim::storage::{AosCpuStorage, CpuStorage, Storage};
+use crate::sim::storage::{AosStorage, ElementStorage, Storage};
 
- 
-
-pub struct AosVecStorage<Item> {
-    items: Vec<Item>,
+ pub struct AosVecStorage<Element> {
+    items: Vec<Element>,
 }
 
-impl<Item> AosVecStorage<Item> {
+impl<Element> AosVecStorage<Element> {
+    #[inline(always)]
     pub fn new() -> Self {
         Self { items: Vec::new() }
     }
 }
 
-impl<Item> Storage for AosVecStorage<Item> {
+impl<Element> Storage for AosVecStorage<Element> {
+    #[inline(always)]
     fn len(&self) -> usize { 
         self.items.len() 
     }
     
+    #[inline(always)]
     fn capacity(&self) -> usize { 
         self.items.capacity() 
     }
     
+    #[inline(always)]
     fn clear(&mut self) { 
         self.items.clear(); 
     } 
 }
 
-impl<Item> CpuStorage for AosVecStorage<Item> {
-    type Item = Item; // FIXED: Associated type moves to CpuStorage
+impl<Element: 'static> ElementStorage for AosVecStorage<Element> {
+    type Element = Element;  
+    
+    // Wire the associated view types directly to standard safe Rust slices
+    type View<'a> = &'a [Element] where Self: 'a;
+    type ViewMut<'a> = &'a mut [Element] where Self: 'a;
 
-    fn new(capacity: usize) -> Self {
-        Self { items: Vec::with_capacity(capacity) }
+    #[inline(always)]
+    fn view(&self) -> Self::View<'_> {
+        &self.items
     }
 
-    fn push(&mut self, item: Self::Item) { // FIXED: push moves to CpuStorage
-        self.items.push(item);
+    #[inline(always)]
+    fn view_mut(&mut self) -> Self::ViewMut<'_> {
+        &mut self.items
     }
 
-    fn swap_remove(&mut self, index: usize) -> Self::Item { // FIXED: swap_remove moves to CpuStorage
+    #[inline(always)]
+    fn push(&mut self, element: Self::Element) {  
+        self.items.push(element);
+    }
+
+    #[inline(always)]
+    fn swap_remove(&mut self, index: usize) -> Self::Element {
         self.items.swap_remove(index)
     }
 }
 
-impl<Item> AosCpuStorage for AosVecStorage<Item> {
-    fn as_slice(&self) -> &[Self::Item] {
+impl<Element: 'static> AosStorage for AosVecStorage<Element> {
+    #[inline(always)]
+    fn as_slice(&self) -> &[Self::Element] {
         &self.items
     }
 
-    fn as_slice_mut(&mut self) -> &mut [Self::Item] {
+    #[inline(always)]
+    fn as_slice_mut(&mut self) -> &mut [Self::Element] {
         &mut self.items
     }
 }

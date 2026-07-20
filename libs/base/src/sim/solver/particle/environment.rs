@@ -1,8 +1,9 @@
 use crate::math::Vector;
 use crate::prelude::solver::particle::space::GridSpace;
 use crate::prelude::solver::particle::tuning::SimulationTuning;
-use crate::prelude::solver::particle::runtime::RuntimeState;
+use crate::prelude::solver::particle::state::State;
 use crate::sim::simulation::SubstepProvider;
+use crate::sim::solver::particle::flags::{CollisionFlags}; 
 
 
 pub enum GravityModel<V: Vector> {
@@ -21,29 +22,46 @@ impl<V: Vector> GravityModel<V> {
     }
 }
 
-pub struct ParticleEnvironment<V> 
+pub struct ParticleEnvironment<V, F> 
 where 
-    V: Vector 
-{
+    V: Vector,  
+    F: CollisionFlags,
+{       
     pub space: GridSpace<V>,
-    pub tuning: SimulationTuning<V>,
-    pub state: RuntimeState<V>,
+    pub tuning: SimulationTuning<V, F>,  
+    pub state: State<V>,
     pub gravity: GravityModel<V>,
 }
 
-impl<V: Vector> ParticleEnvironment<V> {
-    pub fn new(space: GridSpace<V>, tuning: SimulationTuning<V>, state: RuntimeState<V>, 
-        gravity: GravityModel<V>) -> Self {
-        Self {
+impl<V, F> ParticleEnvironment<V, F> 
+where 
+    V: Vector, 
+    F: CollisionFlags,
+{
+    /// Creates a new parameterized particle environment.
+    /// The static collision flag behavior is automatically inferred from the provided tuning configuration.
+    #[inline(always)]
+    pub fn new( 
+        space: GridSpace<V>, 
+        tuning: SimulationTuning<V, F>, 
+        state: State<V>, 
+        gravity: GravityModel<V>,
+    ) -> Self {
+        Self { 
             space,  
             tuning, 
             state,
-            gravity
+            gravity,
         }
     }
-}
 
-impl<V: Vector> SubstepProvider for ParticleEnvironment<V> {
+   
+}
+impl<V,F> SubstepProvider for ParticleEnvironment<V,F> 
+where 
+    V: Vector, 
+    F: CollisionFlags,
+{
     #[inline]
     fn substep_count(&self) -> u64 { 
         self.tuning.substep_count

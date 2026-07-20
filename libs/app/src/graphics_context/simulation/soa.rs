@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use wgpu::util::DeviceExt;
-use base::{math::Vector, sim::{solver::particle::{verlet_particle::{VerletParticle, VerletParticleColumns}, verlet_soa_vec_storage::VerletParticleSoaVecStorage}, 
-storage::{SoaCpuStorage, Storage as _}}, ui::layout::color::Color};
+use base::{math::Vector, sim::{solver::particle::{verlet_particle::{VerletParticle}, 
+verlet_soa_vec_storage::{SoaColor, SoaPos, SoaRadius, VerletParticleSoaVecStorage}}, storage::Storage}, ui::layout::color::Color};
 use crate::graphics_context::{
      renderer::Renderer, shader::{
         ShaderBuilder,
@@ -47,7 +47,6 @@ use crate::graphics_context::{
         },
     ]
 }
-
 pub struct SoaSimulationRenderer<I> {
     pipeline: Option<wgpu::RenderPipeline>,
     quad_state: Option<QuadState>,
@@ -58,15 +57,12 @@ pub struct SoaSimulationRenderer<I> {
     color_buffer: Option<wgpu::Buffer>,
     instance_count: u32,
 
-    // Track raw data addresses and total data allocations directly from your RawColumns
-    pos_ptr: *const u8,
-    pos_bytes: usize,
-
-    radius_ptr: *const u8,
-    radius_bytes: usize,
-
-    color_ptr: *const u8,
-    color_bytes: usize,
+    // 🚀 PERSISTENT HEAP STAGING CACHES:
+    // Replaces dangerous tracking raw pointers with safe, local byte streams.
+    // Preserves capacity across frame ticks to eliminate runtime allocation overhead!
+    pos_staging: Vec<u8>,
+    radius_staging: Vec<u8>,
+    color_staging: Vec<u8>,
 
     _marker: PhantomData<I>,
 }
@@ -80,18 +76,39 @@ impl<I> SoaSimulationRenderer<I> {
             radius_buffer: None,
             color_buffer: None,
             instance_count: 0,
-            pos_ptr: std::ptr::null(),
-            pos_bytes: 0,
-            radius_ptr: std::ptr::null(),
-            radius_bytes: 0,
-            color_ptr: std::ptr::null(),
-            color_bytes: 0,
+            pos_staging: Vec::with_capacity(2048),
+            radius_staging: Vec::with_capacity(1024),
+            color_staging: Vec::with_capacity(1024),
             _marker: PhantomData,
         }
     }
+
+    /// Internal helper method to dynamically cycle or allocate vertex buffers
+    /// based on active sizing changes during frame streams.
+    fn update_buffer(
+        device: &wgpu::Device, 
+        buf: &mut Option<wgpu::Buffer>, 
+        data: &[u8], 
+        label: &'static str
+    ) {
+        if let Some(existing) = buf {
+            if existing.size() >= data.len() as u64 {
+                return;
+            }
+        }
+        
+        *buf = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents: data,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        }));
+    }
 }
 
-// Binds directly to your custom VerletParticleSoaVecStorage structure
+// =========================================================================
+// FLAWLESS SYNCHRONIZATION WITH YOUR EXACT TRAIT SPECIFICATION
+// =========================================================================
+
 impl<V> SimulationRenderer<VerletParticleSoaVecStorage<V>> for SoaSimulationRenderer<VerletParticle<V>>
 where
     V: Vector + 'static,
@@ -102,31 +119,47 @@ where
         self.instance_count = count as u32;
 
         if count == 0 {
-            self.pos_ptr = std::ptr::null();
-            self.pos_bytes = 0;
-            self.radius_ptr = std::ptr::null();
-            self.radius_bytes = 0;
-            self.color_ptr = std::ptr::null();
-            self.color_bytes = 0;
+            self.pos_staging.clear();
+            self.radius_staging.clear();
+            self.color_staging.clear();
             return;
         }
 
-        // Pull raw allocations right out of your existing RawColumn array
-        let columns = storage.columns();
-        
-        let pos_col = &columns[VerletParticleColumns::Pos as usize];
-        self.pos_ptr = pos_col.ptr;
-        self.pos_bytes = count * std::mem::size_of::<V>();
+        // 🚀 1. ACQUIRE IMMUTABLE VIEW DETAILS FROM STORAGE
+        let view = storage.view();
 
-        let radius_col = &columns[VerletParticleColumns::Radius as usize];
-        self.radius_ptr = radius_col.ptr;
-        self.radius_bytes = count * std::mem::size_of::<V::Scalar>();
+        // 🚀 2. EXTRACT STRONGLY TYPED CONTINUOUS MEMORY CHUNKS
+        let positions = view.slice(SoaPos);
+        let radii     = view.slice(SoaRadius);
+        let colors    = view.slice(SoaColor);
 
-        let color_col = &columns[VerletParticleColumns::Color as usize];
-        self.color_ptr = color_col.ptr;
-        self.color_bytes = count * std::mem::size_of::<Color>();
+        // Compute layout dimensions safely
+        let pos_bytes    = count * std::mem::size_of::<V>();
+        let radius_bytes = count * std::mem::size_of::<V::Scalar>();
+        let color_bytes  = count * std::mem::size_of::<Color>();
+
+        // 🚀 3. RECONSTRUCT SAFE NATIVE BYTE SLICES
+        let raw_pos = unsafe { std::slice::from_raw_parts(positions.as_ptr() as *const u8, pos_bytes) };
+        let raw_radius = unsafe { std::slice::from_raw_parts(radii.as_ptr() as *const u8, radius_bytes) };
+        let raw_color = unsafe { std::slice::from_raw_parts(colors.as_ptr() as *const u8, color_bytes) };
+
+        // 🚀 4. INJECT DIRECTLY INTO CONTINUOUS STAGING ARRAYS
+        // This is an incredibly fast memcpy. It guarantees absolute safety 
+        // because data is locally isolated on your host memory immediately.
+        self.pos_staging.resize(pos_bytes, 0);
+        self.pos_staging.copy_from_slice(raw_pos);
+
+        self.radius_staging.resize(radius_bytes, 0);
+        self.radius_staging.copy_from_slice(raw_radius);
+
+        self.color_staging.resize(color_bytes, 0);
+        self.color_staging.copy_from_slice(raw_color);
     }
 }
+
+// =========================================================================
+// RUNTIME RENDER PASS HANDLERS (UNCHANGED SIGNATURES)
+// =========================================================================
 
 impl<I: 'static> Renderer for SoaSimulationRenderer<I> {
     type Data = ();
@@ -182,38 +215,17 @@ impl<I: 'static> Renderer for SoaSimulationRenderer<I> {
             quad_state.resize(queue, config.width as f32, config.height as f32);
         }
 
-        if self.instance_count == 0 || self.pos_ptr.is_null() { return; }
+        if self.instance_count == 0 || self.pos_staging.is_empty() { return; }
 
-        // SAFETY: Reconstruct byte slices utilizing properties directly passed from RawColumn elements
-        let raw_pos = unsafe { std::slice::from_raw_parts(self.pos_ptr, self.pos_bytes) };
-        let raw_radius = unsafe { std::slice::from_raw_parts(self.radius_ptr, self.radius_bytes) };
-        let raw_color = unsafe { std::slice::from_raw_parts(self.color_ptr, self.color_bytes) };
+        // 🚀 1. VERIFY OR RESIZE BACKING HARDWARE VOLUMES
+        Self::update_buffer(device, &mut self.pos_buffer, &self.pos_staging, "SOA Positions Buffer");
+        Self::update_buffer(device, &mut self.radius_buffer, &self.radius_staging, "SOA Radii Buffer");
+        Self::update_buffer(device, &mut self.color_buffer, &self.color_staging, "SOA Colors Buffer");
 
-        macro_rules! update_soa_buffer {
-            ($buf:expr, $data:expr, $label:expr) => {
-                if let Some(buf) = &$buf {
-                    if buf.size() >= $data.len() as u64 {
-                        queue.write_buffer(buf, 0, $data);
-                    } else {
-                        $buf = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some($label),
-                            contents: $data,
-                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                        }));
-                    }
-                } else {
-                    $buf = Some(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some($label),
-                        contents: $data,
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    }));
-                }
-            };
-        }
-
-        update_soa_buffer!(self.pos_buffer, raw_pos, "SOA Positions Buffer");
-        update_soa_buffer!(self.radius_buffer, raw_radius, "SOA Radii Buffer");
-        update_soa_buffer!(self.color_buffer, raw_color, "SOA Colors Buffer");
+        // 🚀 2. SHIP DATA MEMORY MAPS DIRECTLY TO GPU COMMAND REGISTERS
+        if let Some(buf) = &self.pos_buffer { queue.write_buffer(buf, 0, &self.pos_staging); }
+        if let Some(buf) = &self.radius_buffer { queue.write_buffer(buf, 0, &self.radius_staging); }
+        if let Some(buf) = &self.color_buffer { queue.write_buffer(buf, 0, &self.color_staging); }
     }
 
     fn draw<'a>(&'a self, pass: &mut wgpu::RenderPass<'a>) {
@@ -237,4 +249,3 @@ impl<I: 'static> Renderer for SoaSimulationRenderer<I> {
         pass.draw(0..6, 0..self.instance_count);
     }
 }
-        

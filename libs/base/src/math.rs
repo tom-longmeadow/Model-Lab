@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 pub use glam::FloatExt;
 
-use crate::sim::solver::particle::space::grid_key::GridKey;
+ 
 pub const EPSILON: f32 = 1e-5;
 
 // ==========================================
@@ -70,6 +70,7 @@ pub trait QuantizeInto<K, S> {
     fn quantize_into(self, cell_size: S) -> K;
 }
 
+
 pub trait VectorMask: Copy + Clone + PartialEq {
     type Array: Copy;
     
@@ -83,13 +84,13 @@ pub trait VectorMask: Copy + Clone + PartialEq {
 pub trait Vector: 
     Copy 
     + PartialEq  
-    + std::ops::Add<Output = Self> 
-    + std::ops::Sub<Output = Self> 
-    + std::ops::AddAssign 
-    + std::ops::SubAssign 
-    + std::ops::Neg<Output = Self>
-    + std::ops::Mul<Self::Scalar, Output = Self> 
-    + std::ops::Div<Self::Scalar, Output = Self>
+    + Add<Output = Self> 
+    + Sub<Output = Self> 
+    + AddAssign 
+    + SubAssign 
+    + Neg<Output = Self>
+    + Mul<Self::Scalar, Output = Self> 
+    + Div<Self::Scalar, Output = Self>
     + QuantizeInto<Self::Quantized, Self::Scalar>
 {
     const DIM: usize;
@@ -97,15 +98,13 @@ pub trait Vector:
 
     type Scalar: FloatScalar; 
     type Mask: VectorMask;  
-    type Quantized: GridKey; 
+    
+ 
+    type Quantized; 
 
-    /// High-performance projection to an immutable scalar slice.
     fn as_slice(&self) -> &[Self::Scalar];
-
-    /// High-performance projection to a mutable scalar slice.
     fn as_slice_mut(&mut self) -> &mut [Self::Scalar];
 
-    // Zero-overhead component extraction via local slice lookup
     #[inline(always)]
     fn component(&self, index: usize) -> Self::Scalar {
         self.as_slice()[index]
@@ -132,6 +131,8 @@ pub trait Vector:
     fn from_slice(slice: &[Self::Scalar]) -> Self;
     fn from_f64_array<const N: usize>(arr: [f64; N]) -> Self;
 
+    fn perpendicular_vector(self) -> Self;
+
     #[inline(always)]
     fn contains_point(self, min_bound: Self, max_bound: Self) -> bool {
         let out_min = self.cmplt(min_bound);
@@ -146,8 +147,9 @@ pub trait Vector:
     } 
 }
 
-
-
+// =========================================================================
+// INFRASTRUCTURE STRUCTURAL REUSABLE MACROS
+// =========================================================================
 
 macro_rules! impl_float_scalar {
     ($scalar_type:ty) => {
@@ -157,57 +159,28 @@ macro_rules! impl_float_scalar {
             const INFINITY: Self = <$scalar_type>::INFINITY;          
             const NEG_INFINITY: Self = <$scalar_type>::NEG_INFINITY; 
 
-            #[inline(always)] 
-            fn sqrt(self) -> Self { 
-                <$scalar_type>::sqrt(self) 
-            }
-
-            #[inline(always)] 
-            fn exp(self) -> Self { 
-                <$scalar_type>::exp(self) 
-            }
-
-            #[inline(always)] 
-            fn sin(self) -> Self { 
-                <$scalar_type>::sin(self) 
-            }
-
-            #[inline(always)] 
-            fn from_f64(v: f64) -> Self { 
-                v as $scalar_type 
-            }
-
-            #[inline(always)] 
-            fn to_f64(self) -> f64 { 
-                self as f64 
-            }
-
-            #[inline(always)] 
-            fn abs(self) -> Self { 
-                <$scalar_type>::abs(self) 
-            }
+            #[inline(always)] fn sqrt(self) -> Self { <$scalar_type>::sqrt(self) }
+            #[inline(always)] fn exp(self) -> Self { <$scalar_type>::exp(self) }
+            #[inline(always)] fn sin(self) -> Self { <$scalar_type>::sin(self) }
+            #[inline(always)] fn from_f64(v: f64) -> Self { v as $scalar_type }
+            #[inline(always)] fn to_f64(self) -> f64 { self as f64 }
+            #[inline(always)] fn abs(self) -> Self { <$scalar_type>::abs(self) }
         }
     };
 }
 
 macro_rules! impl_quantize {
-    ($from_type:ty, $to_type:ty, $scalar:ty, $dim:expr) => {
+    ($from_type:ty, $to_type:ty, $scalar:ty, [$($field:ident),+]) => {
         impl QuantizeInto<$to_type, $scalar> for $from_type {
-            #[inline(always)]
-            fn quantize_into(self, cell_size: $scalar) -> $to_type { 
-                let components = <Self as Vector>::as_slice(&self);
-                let mut quantized_arr = [0i32; $dim];
-                
-                for i in 0..$dim {
-                    quantized_arr[i] = (components[i] / cell_size).floor() as i32;
-                }
-                
-                <$to_type>::from_array(quantized_arr)
+            #[inline]
+            fn quantize_into(self, cell_size: $scalar) -> $to_type {
+                <$to_type>::new(
+                    $((self.$field / cell_size).floor() as i32),+
+                )
             }
         }
     };
 }
-
 
 
 macro_rules! impl_vector_mask {
@@ -215,28 +188,16 @@ macro_rules! impl_vector_mask {
         impl VectorMask for $mask_type {
             type Array = [bool; $dim];
 
-            #[inline(always)] 
-            fn any(self) -> bool { 
-                // Directly leverage glam's underlying SIMD bitmask verification
-                <$mask_type>::any(self)
-            }
-
-            #[inline(always)] 
-            fn all(self) -> bool { 
-                <$mask_type>::all(self)
-            }
+            #[inline(always)] fn any(self) -> bool { <$mask_type>::any(self) }
+            #[inline(always)] fn all(self) -> bool { <$mask_type>::all(self) }
 
             #[inline(always)] 
             fn from_array(arr: Self::Array) -> Self { 
-                // 🟢 FIX: Call glam's structural type constructor using explicit 
-                // fully-qualified path syntax. This tells the compiler to call glam's
-                // method directly, completely eliminating infinite recursion loops.
                 <$mask_type>::from_array(arr) 
             }
 
             #[inline(always)] 
             fn to_array(self) -> Self::Array { 
-                // 🟢 FIX: Map to glam's native `.bitmask()` method
                 let mask_val = self.bitmask();
                 let mut bit_arr = [false; $dim];
                 for i in 0..$dim {
@@ -247,8 +208,6 @@ macro_rules! impl_vector_mask {
         }
     };
 }
-
-
 
 macro_rules! impl_vector_for_alias {
     ($vector_type:ty, $dim:expr, $scalar:ty, $native_mask:ty, $target_mask:ty, $quantized_type:ty) => {
@@ -268,6 +227,51 @@ macro_rules! impl_vector_for_alias {
             #[inline(always)]
             fn as_slice_mut(&mut self) -> &mut [Self::Scalar] {
                 unsafe { std::slice::from_raw_parts_mut(self as *mut Self as *mut $scalar, $dim) }
+            }
+
+            // =========================================================================
+            // 🚀 FIXED: DYNAMIC PERPENDICULAR NOZZLE AXIS DERIVATION
+            // =========================================================================
+            #[inline(always)]
+            fn perpendicular_vector(self) -> Self {
+                let len_sq = self.length_squared();
+                if len_sq <= <$scalar as FloatScalar>::ZERO {
+                    // Fallback baseline direction layout if vector is completely dead
+                    let mut fallback = [<$scalar as FloatScalar>::ZERO; $dim];
+                    fallback[0] = <$scalar as FloatScalar>::ONE;
+                    return Self::from_slice(&fallback);
+                }
+
+                if $dim == 2 {
+                    // 🟢 2D SPEED STRIDE: Standard fast 90-degree axis rotation
+                    let slice = self.as_slice();
+                    let mut perp_arr = [<$scalar as FloatScalar>::ZERO; $dim];
+                    perp_arr[0] = -slice[1];
+                    perp_arr[1] = slice[0];
+                    
+                    Self::from_slice(&perp_arr).normalize()
+                } else {
+                    // 🟢 3D/4D STABLE STRIDE: Branchless non-flipping orthogonal project frame
+                    let n = self.normalize();
+                    let n_slice = n.as_slice();
+                    
+                    let sign = if n_slice[2] < <$scalar as FloatScalar>::ZERO {
+                        -<$scalar as FloatScalar>::ONE
+                    } else {
+                        <$scalar as FloatScalar>::ONE
+                    };
+                    
+                    let a = -<$scalar as FloatScalar>::ONE / (sign + n_slice[2]);
+                    let b = n_slice[0] * n_slice[1] * a;
+                    
+                    let mut perp_arr = [<$scalar as FloatScalar>::ZERO; $dim];
+                    perp_arr[0] = <$scalar as FloatScalar>::ONE + sign * n_slice[0] * n_slice[0] * a;
+                    perp_arr[1] = sign * b;
+                    perp_arr[2] = -sign * n_slice[0];
+                    
+                    // If dimension is 4D, leave W axis untouched as zero
+                    Self::from_slice(&perp_arr).normalize()
+                }
             }
 
             #[inline(always)] fn dot(self, other: Self) -> Self::Scalar { <$vector_type>::dot(self, other) }
@@ -301,15 +305,8 @@ macro_rules! impl_vector_for_alias {
                 self
             }
 
-            #[inline(always)]
-            fn length_squared(self) -> Self::Scalar {
-                self.dot(self)
-            }
-
-            #[inline(always)]
-            fn length(self) -> Self::Scalar {
-                <$vector_type>::length(self)
-            }
+            #[inline(always)] fn length_squared(self) -> Self::Scalar { self.dot(self) }
+            #[inline(always)] fn length(self) -> Self::Scalar { <$vector_type>::length(self) }
             
             #[inline(always)] fn cmplt(self, other: Self) -> Self::Mask { 
                 let native: $native_mask = <$vector_type>::cmplt(self, other);
@@ -323,7 +320,7 @@ macro_rules! impl_vector_for_alias {
                 <Self::Mask as VectorMask>::from_array(arr)
             }
             
-           #[inline(always)] 
+            #[inline(always)] 
             fn select(mask: Self::Mask, true_val: Self, false_val: Self) -> Self {  
                 let bool_arr = <Self::Mask as VectorMask>::to_array(mask);
                 let native_mask = <$native_mask as VectorMask>::from_array(bool_arr);
@@ -358,10 +355,10 @@ impl_float_scalar!(f64);
 impl_vector_mask!(BVec2, 2);
 impl_vector_mask!(BVec3, 3);
 // Map the quantization matrices natively across your spatial configurations
-impl_quantize!(Vec2,  IVec2, f32, 2);
-impl_quantize!(DVec2, IVec2, f64, 2);
-impl_quantize!(Vec3,  IVec3, f32, 3);
-impl_quantize!(DVec3, IVec3, f64, 3);
+impl_quantize!(Vec2, IVec2, f32, [x, y]);
+impl_quantize!(DVec2, IVec2, f64, [x, y]);
+impl_quantize!(Vec3, IVec3, f32, [x, y, z]);
+impl_quantize!(DVec3, IVec3, f64, [x, y, z]);
 
 impl_vector_for_alias!(Vec2,  2, f32, BVec2, BVec2, IVec2);
 impl_vector_for_alias!(DVec2, 2, f64, BVec2, BVec2, IVec2);

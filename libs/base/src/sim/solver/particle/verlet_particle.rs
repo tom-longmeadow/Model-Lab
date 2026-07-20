@@ -1,3 +1,4 @@
+ 
 use crate::{math::{FloatScalar, Vector}, ui::layout::color::Color};
 
 #[repr(C)]
@@ -25,7 +26,6 @@ pub enum VerletParticleColumns {
     InvMass = 5,
 }
  
-
 impl<V> VerletParticle<V> 
 where 
     V: Vector
@@ -85,4 +85,4 @@ where
         VerletParticle::new(V::ZERO)
     }
 }
-
+ 

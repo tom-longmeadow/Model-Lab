@@ -8,7 +8,7 @@ members = [
 ]
 resolver = "2"
 
-default-members = ["apps/particle/water_fountain_soa_verlet"]
+default-members = ["apps/particle/ball_bounce_soa_verlet"]
 
 [workspace.dependencies]
 app = { path = "libs/app" } 

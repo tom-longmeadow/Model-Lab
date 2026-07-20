@@ -1,19 +1,29 @@
 use crate::math::Vector;
-
-pub struct RuntimeState<V> 
+use crate::ui::layout::color::Color;
+pub struct State<V> 
 where 
     V: Vector 
 { 
     pub runtime_jitter: V,   
-    pub raw_jitter: [f64; 4],
+    pub raw_jitter: [f64; 4], 
+    pub colors: &'static [Color]
 }
 
-impl<V: Vector> RuntimeState<V> {
-    pub fn new() -> Self {
+impl<V: Vector> State<V> {
+    pub fn new(colors: &'static [Color]) -> Self {
         Self {
             runtime_jitter: V::ZERO,  
             raw_jitter: [0.0; 4], 
+            colors
         }
+    }
+
+     #[inline(always)]
+    pub fn get_color(&self, percent: f64) -> Color { 
+        if self.colors.is_empty() {
+            return Color::WHITE; 
+        }
+        Color::get_color_at_percentage(self.colors, percent as f32)
     }
 
     /// Call this once per frame before processing particle constraints.

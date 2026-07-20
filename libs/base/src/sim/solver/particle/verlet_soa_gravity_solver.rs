@@ -1,173 +1,233 @@
 use std::hash::Hash; 
 use crate::math::{FloatScalar, Vector}; 
-use crate::sim::solver::Solver; 
-use crate::sim::solver::particle::environment::ParticleEnvironment; 
+use crate::sim::solver::Solver;  
+use crate::sim::solver::particle::environment::ParticleEnvironment;  
+use crate::sim::solver::particle::flags::CollisionFlags;
+use crate::sim::solver::particle::physics::verlet_soa_collision::VerletSoaCollision;
+use crate::sim::solver::particle::physics::verlet_soa_constraint::VerletSoaConstraint;
+use crate::sim::solver::particle::physics::verlet_soa_kinetics::VerletSoaKinetics;
+use crate::sim::solver::particle::physics::verlet_soa_prestep::VerletSoaPrestep; 
 use crate::sim::solver::particle::space::collision_registry::CollisionRegistry;
-use crate::sim::solver::particle::verlet_particle::VerletParticleColumns; 
-use crate::sim::solver::particle::verlet_physics::VerletPhysics;
-use crate::sim::solver::particle::verlet_soa_vec_storage::{ErgonomicSoaCpuStorageExt, VerletParticleSoaVecStorage}; 
-use crate::sim::storage::{Storage};  
+use crate::sim::solver::particle::space::grid_key::GridKey;
+use crate::sim::solver::particle::verlet_soa_vec_storage::{ 
+    AccField, SoaColor, SoaInvMass, SoaPos, SoaPosOld, SoaRadius, VerletParticleSoaVecStorage};
+use crate::sim::storage::Storage; 
+ 
 
-use crate::sim::solver::particle::space::grid::UniformGrid;
-use crate::ui::layout::color::Color;
 
-pub struct VerletSoaGravitySolver<V> 
-where 
-    V: Vector,
-    V::Quantized: Hash + Eq + Copy,
-{  
-    pub grid: UniformGrid<V>,        // 🟢 OWNED INSTANCE: Matches the unified AoS design layout
-    pub registry: CollisionRegistry, 
-    pub color_by_velocity: bool
+pub struct VerletSoaGravitySolver{
+    pub collision_registry: CollisionRegistry,
 }
 
-impl<V> VerletSoaGravitySolver<V>
-where 
-    V: Vector,
-    V::Quantized: Hash + Eq + Copy,
-{
-    pub fn new(initial_capacity: usize, default_cell_size: V::Scalar, color_by_velocity: bool) -> Self { 
+impl VerletSoaGravitySolver { 
+    #[inline]
+    pub fn new() -> Self {
         Self { 
-            grid: UniformGrid::new(default_cell_size),
-            registry: CollisionRegistry::with_capacity(initial_capacity), 
-            color_by_velocity
-
+            collision_registry: CollisionRegistry::with_capacity(2048),
         }
     }
 }
 
-impl<V: Vector + 'static> Solver<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V>> for VerletSoaGravitySolver<V>
+impl<V, F> Solver<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V, F>> for VerletSoaGravitySolver
 where
-    V::Quantized: Hash + Eq + Copy,
+    V: Vector + 'static,
+     V::Quantized: Hash + Eq + Copy + GridKey,
+    F: CollisionFlags + 'static, // Bind to the static engine flag configurations
 {
-    fn init(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
+    fn init(
+        &mut self, 
+        storage: &mut VerletParticleSoaVecStorage<V>, 
+        environment: &mut ParticleEnvironment<V, F>
+    ) {
+        self.collision_registry = CollisionRegistry::new(); 
+    }
 
-    fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, _tick: u64, step_dt:f64, environment: &mut ParticleEnvironment<V>) {
-        environment.state.update_jitter(_tick);
-        
-        let len = Storage::len(storage);
+    fn pre_step(
+        &mut self, 
+        storage: &mut VerletParticleSoaVecStorage<V>, 
+        tick: u64, 
+        step_dt: f64, 
+        environment: &mut ParticleEnvironment<V, F>
+    ) {
+        let len = storage.len();
         if len == 0 { return; }
 
-        
-        
+       
+        let view = storage.view_mut(); 
 
-        if self.color_by_velocity{
-             
-            let pos_base = storage.columns[VerletParticleColumns::Pos as usize].ptr.cast::<V>();
-            let pos = unsafe { std::slice::from_raw_parts(pos_base, len) };
+        // 2. Call .slice directly on the view!
+        let radii = view.slice(SoaRadius); 
 
-            let old_base = storage.columns[VerletParticleColumns::PosOld as usize].ptr.cast::<V>();
-            let old = unsafe { std::slice::from_raw_parts(old_base, len) };
+        VerletSoaPrestep::update_grid_cell_size(&radii, environment);
 
-            // 1. Cast to a mutable pointer (*mut Color)
-            let color_base = storage.columns[VerletParticleColumns::Color as usize].ptr.cast::<Color>();
-            // 2. Use from_raw_parts_mut to get a mutable slice reference (&mut [Color])
-            let color = unsafe { std::slice::from_raw_parts_mut(color_base, len) };
-    
-              
-            let min_speed_threshold = 0.0_f64;   // Anything moving slower than this is "still" (Dark Blue)
-            let max_expected_speed = 160.0_f64;  // Your cap for Foam White
 
-            for i in 0..len {
-                let p = pos[i];
-                let p_old = old[i];
-                
-                let velocity = p - p_old;
-                let speed = velocity.length().to_f64().abs() / step_dt;
-                
-                // 1. Subtract the threshold to clear out the micro-jitter
-                let adjusted_speed = (speed - min_speed_threshold).max(0.0);
-                
-                // 2. Map the remaining range smoothly from [0.0, max - min]
-                let speed_range = max_expected_speed - min_speed_threshold;
-                let percentage = (adjusted_speed / speed_range).clamp(0.0, 1.0) as f32;
+        // // Unpack your runtime bit-masked layout views safely and sequentially
+        // let view = storage.view_mut();
+        // let mut pos      = view.slice_mut(SoaPos);
+        // let mut pos_old  = view.slice_mut(SoaPosOld);
+        // let mut color    = view.slice_mut(SoaColor);
+          
+        // let min_speed = V::Scalar::from_f64(1.0);
+        // let max_speed = V::Scalar::from_f64(200.0);
+        // let v_dt = V::Scalar::from_f64(step_dt); 
 
-                let c = Color::get_color_at_percentage(&Color::WATER, percentage);
-                
-                color[i] = c; 
-            }
-        }
-        
-
-        let rad_base = storage.columns[VerletParticleColumns::Radius as usize].ptr.cast::<V::Scalar>();
-        let radii = unsafe { std::slice::from_raw_parts(rad_base, len) };
-
-        type S<V> = <V as Vector>::Scalar; 
-        let mut min_radius = S::<V>::INFINITY;
-        let mut max_radius = S::<V>::NEG_INFINITY;
-
-        for &r in radii.iter() {
-            if r < min_radius { min_radius = r; }
-            if r > max_radius { max_radius = r; }
-        }
-
-        // Base cell size scales off the max collision DIAMETER (2 * radius)
-        let max_diameter = max_radius + max_radius;
-        self.grid.set_cell_size(max_diameter);  
-        
-        environment.tuning.update_physics(min_radius, max_radius);
+        // VerletSoaPrestep::update_color_from_velocity(
+        //     min_speed, max_speed, &mut pos, &mut pos_old, &mut color, v_dt, tick, environment
+        // );  
     }
     
-    fn sub_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, sub_step_dt: f64, environment: &ParticleEnvironment<V>) {
-        let len = Storage::len(storage);
-        if len == 0 { return; }
+   fn sub_step(
+        &mut self, 
+        storage: &mut VerletParticleSoaVecStorage<V>, 
+        sub_step_dt: f64, 
+        environment: &mut ParticleEnvironment<V, F>
+    ) {
+        // // 💡 Add this exact diagnostic block here:
+        // println!(
+        //     "[DEBUG] Storage state on sub_step -> logical len: {}, capacity: {}", 
+        //     storage.len(), 
+        //     storage.capacity()
+        // );
+
+        let len = storage.len();
+        if len == 0 { 
+            //println!("[DEBUG] sub_step safely skipped because storage is empty.");
+            return; 
+        }
+      
 
         let v_dt = V::Scalar::from_f64(sub_step_dt);
-        let gravity_acc = environment.gravity.get();
 
-        // 🟢 FIXED: Unpack using our updated native vector slice extension trait
-        let (positions, positions_old, accelerations, radii, inv_masses) = 
-            storage.get_physics_components_mut::<V>();
+        // Create exactly ONE view descriptor over the storage engine
+        let view = storage.view();
 
-        // 1. APPLY FORCE INTEGRATION (Unified vector math removes messy per-component indexing loops)
-        for acc in accelerations.iter_mut() {
-            *acc = gravity_acc;
-        }
+        // 1. Extract shared runtime loans safely
+        let radii    = view.slice(SoaRadius);
+        let inv_mass = view.slice(SoaInvMass);
 
-        // 2. EXECUTED PIPELINE DELEGATION
-        // A. Update positions and velocities via our clean, non-aliasing contiguous array lanes
-        VerletPhysics::soa_update_kinetics(
-            positions, 
-            positions_old, 
-            accelerations, 
+        // 2. Extract exclusive mutable loans safely
+        let mut pos     = view.slice_mut_typed(SoaPos);
+        let mut pos_old = view.slice_mut_typed(SoaPosOld);
+        let mut acc     = view.slice_mut_typed(AccField);
+
+        // 3. Run your physics modifications safely
+        VerletSoaKinetics::apply_uniform_acceleration(&mut acc, environment);
+        
+        VerletSoaKinetics::update_kinetics(
+            &mut pos, 
+            &mut pos_old, 
+            &mut acc, 
             v_dt, 
             environment
         );
 
-        // 🟢 FIXED: Populate the grid directly using native types. No array reconstruction or f64 conversions!
-        self.grid.clear();
-        let cached_cell_size = self.grid.cell_size;
+        VerletSoaCollision::populate_grid(&pos, environment);
 
-        for (i, &pos) in positions.iter().enumerate() {
-            let cell_key = pos.quantize_into(cached_cell_size);
-            self.grid.insert(cell_key, i);
-        }
-
-        // 🏎️ CRITICAL FIX: Match the signature of your new merged spatial direct solver.
-        // This does the work of both old B & C steps combined!
-        unsafe {
-            self.grid.soa_resolve_collisions_spatial_direct(
-                positions, 
-                positions_old, 
-                inv_masses, 
-                radii, 
-                v_dt,
-                environment
-            );
-        }
-
-        // D. Bounded wall limits and containment boundaries
-        VerletPhysics::soa_apply_position_constraints(
-            positions, 
-            positions_old, 
-            radii, 
-            v_dt, 
+        VerletSoaCollision::resolve_collisions::<V, VerletParticleSoaVecStorage<V>, F>(
+            &mut pos,  
+            &inv_mass, 
+            &radii,  
+            &mut self.collision_registry,
             environment
         );
 
-        // ⚠️ ATTENTION: Step E requires an approach adjustment (See below)
+        VerletSoaConstraint::apply_bounds(
+            &mut pos, 
+            &mut pos_old, 
+            &radii, 
+            v_dt, 
+            environment
+        );
     }
  
-    
-    fn post_step(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>,  _environment: &ParticleEnvironment<V>) { }
+    fn post_step(
+        &mut self, 
+        _storage: &mut VerletParticleSoaVecStorage<V>,  
+        _environment: &ParticleEnvironment<V, F>
+    ) {}
 }
+
+
+// pub struct VerletSoaGravitySolver;
+// impl<V> Solver<VerletParticleSoaVecStorage<V>, ParticleEnvironment<V>> for VerletSoaGravitySolver
+// where
+//     V: Vector + 'static,
+//     V::Quantized: Hash + Eq + Copy + Ord,  
+// {
+//     fn init(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>, _environment: &mut ParticleEnvironment<V>) { }
+
+//     fn pre_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, tick: u64, step_dt: f64, environment: &mut ParticleEnvironment<V>) {
+
+// let view = storage.view_mut();
+//          let mut positions     = view.slice_mut(PosField);
+//     let mut old_positions = view.slice_mut(PosOldField);
+//     let accelerations     = view.as_view().slice(AccField); // Read-only is fine!
+
+
+//         // VerletSoaPrestep::update_jitter(tick, environment);
+
+//         // let len = Storage::len(storage);
+//         // if len == 0 { return; }
+
+//         // let cols = storage.columns_mut(); 
+//         // let radii = cols.slice(VerletParticleColumns::Radius, len);
+//         // let pos   = cols.slice(VerletParticleColumns::Pos, len);
+//         // let pos_old   = cols.slice(VerletParticleColumns::PosOld, len);
+//         // let color = cols.slice_mut(VerletParticleColumns::Color, len);
+        
+//         // VerletSoaPrestep::update_grid_cell_size(radii, tick, environment);
+
+//         // let min_speed = V::Scalar::from_f64(1.0);
+//         // let max_speed = V::Scalar::from_f64(200.0);
+//         // let v_dt = V::Scalar::from_f64(step_dt); 
+
+//         // VerletSoaPrestep::update_color_from_velocity(
+//         //     min_speed, max_speed, pos, pos_old, color, v_dt, tick, environment
+//         // );  
+        
+//     }
+    
+//     fn sub_step(&mut self, storage: &mut VerletParticleSoaVecStorage<V>, sub_step_dt: f64, environment: &mut ParticleEnvironment<V>) 
+//     {
+
+//         // let len = Storage::len(storage);
+//         // if len == 0 { return; }
+
+//         // let v_dt = V::Scalar::from_f64(sub_step_dt);
+
+//         // let cols = storage.columns_mut();  
+//         // let acc   = cols.slice_mut(VerletParticleColumns::Acc, len);
+//         // let pos   = cols.slice_mut(VerletParticleColumns::Pos, len);
+//         // let pos_old   = cols.slice_mut(VerletParticleColumns::PosOld, len);
+//         // let inv_mass   = cols.slice(VerletParticleColumns::InvMass, len);
+//         // let radii   = cols.slice(VerletParticleColumns::Radius, len);
+
+//         // VerletSoaKinetics::apply_uniform_acceleration(acc, v_dt, environment);
+
+        
+//         // VerletSoaKinetics::update_kinetics(
+//         //     pos, 
+//         //     pos_old, 
+//         //     acc, 
+//         //     v_dt, 
+//         //     environment
+//         // );
+
+//         // VerletSoaCollision::populate_grid(pos, environment);
+
+//         // VerletSoaCollision::resolve_collisions::<V, A, true, true, true, true>(
+//         //         pos, pos_old, inv_mass,  radii,  v_dt,  environment);
+
+ 
+       
+//         // VerletPhysics::soa_apply_position_constraints(
+//         //     positions, 
+//         //     positions_old, 
+//         //     radii, 
+//         //     v_dt, 
+//         //     environment
+//         // );
+//     }
+ 
+//     fn post_step(&mut self, _storage: &mut VerletParticleSoaVecStorage<V>,  _environment: &ParticleEnvironment<V>) { }
+// }
