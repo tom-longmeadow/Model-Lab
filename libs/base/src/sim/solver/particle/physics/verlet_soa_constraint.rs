@@ -1,10 +1,11 @@
-use crate::{math::{FloatScalar, Vector, VectorMask}, sim::solver::particle::{environment::ParticleEnvironment, flags::CollisionFlags}};
+use crate::{math::{FloatScalar, Vector}, sim::solver::particle::{environment::ParticleEnvironment, flags::CollisionFlags}};
 
 
 
 pub struct VerletSoaConstraint;
 impl VerletSoaConstraint {
 
+     #[inline(always)]
     pub fn apply_bounds<V, F>( 
         positions: &mut [V],         
         positions_old: &mut [V],     
@@ -12,12 +13,10 @@ impl VerletSoaConstraint {
         dt: V::Scalar,
         environment: &ParticleEnvironment<V, F>,
     ) where 
-        V: Vector + 'static,
-        V::Scalar: FloatScalar + 'static,
+        V: Vector,
         F: CollisionFlags + 'static,
     {
         let max_len = positions.len();
-        
         if max_len == 0 
             || positions_old.len() < max_len
             || radii.len() < max_len 
@@ -25,56 +24,63 @@ impl VerletSoaConstraint {
             return; 
         }
 
-        let positions = &mut positions[..max_len];
-        let positions_old = &mut positions_old[..max_len]; 
-        let radii = &radii[..max_len];
+        // FIXED: Swapped out standard slicing for unchecked windowing 
+        // to stay perfectly aligned with your high-speed update loops
+        let pos_slice = unsafe { positions.get_unchecked_mut(0..max_len) };
+        let pos_old_slice = unsafe { positions_old.get_unchecked_mut(0..max_len) }; 
+        let radii_slice = unsafe { radii.get_unchecked(0..max_len) };
 
         let bounds_min = environment.space.bounds.min;
         let bounds_max = environment.space.bounds.max;
         
         let restitution = environment.tuning.physics.restitution;
         let friction_diminish = V::Scalar::ONE - (dt * environment.tuning.physics.friction);
-        let base_noise = environment.state.runtime_jitter;
+        
+        // Hoisted jitter vector expression to register space upfront
+        let base_noise_vec =  environment.state.runtime_jitter;
+        let jitter_term = base_noise_vec * dt;
 
         for i in 0..max_len {
-            let p_pos = positions[i];
-            let p_pos_old = positions_old[i];
-            
-            let vel = p_pos - p_pos_old;
-            let r = V::splat(radii[i]);
-            
-            let min_limit = bounds_min + r;
-            let max_limit = bounds_max - r;
+            unsafe {
+                let current_pos_ptr = pos_slice.get_unchecked_mut(i);
+                let old_pos_ptr = pos_old_slice.get_unchecked_mut(i);
 
-            let under_min_mask = p_pos.cmplt(min_limit);
-            let over_max_mask = p_pos.cmpgt(max_limit);
-            let collision_mask = V::mask_or(under_min_mask, over_max_mask);
+                let p_pos = *current_pos_ptr;
+                let p_pos_old = *old_pos_ptr;
+                
+                let vel = p_pos - p_pos_old;
+                let r = V::splat(*radii_slice.get_unchecked(i));
+                
+                let min_limit = bounds_min + r;
+                let max_limit = bounds_max - r;
 
-            if collision_mask.any() {
-                // 1. Clamp the current position components to the boundary limits
+                let under_min_mask = p_pos.cmplt(min_limit);
+                let over_max_mask = p_pos.cmpgt(max_limit);
+                let collision_mask = V::mask_or(under_min_mask, over_max_mask);
+
+                // FIXED: 100% Branchless Position Clamping via pure SIMD select masks
                 let mut new_pos = p_pos;
                 new_pos = V::select(under_min_mask, min_limit, new_pos);
                 new_pos = V::select(over_max_mask, max_limit, new_pos);
 
-                // 2. Separate normal (bounced) and tangential (friction) velocity paths
-                // To match your old system, we invert the entire incoming velocity vector
-                let clean_bounced_vel_normal = (-vel) * restitution;
-                let jittered_tangential_vel = (vel * friction_diminish) + (base_noise * dt);
-
-                // Choose component-wise behavior across the SIMD lanes
-                let new_vel = V::select(collision_mask, clean_bounced_vel_normal, jittered_tangential_vel);
-
-                // 3. Write back the updated states
-                positions[i] = new_pos;
+                // FIXED: Compute both execution paths simultaneously without CPU branches.
+                // Modern CPUs can execute these arithmetic operations in parallel registers faster 
+                // than they can recover from a single branch misprediction!
                 
-                // 💡 THE CRITICAL VERLET CORRECTION: 
-                // We project pos_old backwards from the NEW position using the full inverted velocity vector,
-                // forcing the next step's (pos - pos_old) calculation to read the true outward bounce momentum!
-                positions_old[i] = new_pos - new_vel;
-            } else {
-                // Open air path: Apply standard air resistance/friction
-                let clean_slowed_vel_tangential = vel * friction_diminish;
-                positions_old[i] = p_pos - clean_slowed_vel_tangential;
+                // Path A: The Wall Collision Bounce
+                let clean_bounced_vel_normal = (-vel) * restitution;
+                let jittered_tangential_vel = (vel * friction_diminish) + jitter_term;
+                let collision_vel = V::select(collision_mask, clean_bounced_vel_normal, jittered_tangential_vel);
+                let collision_pos_old = new_pos - collision_vel;
+
+                // Path B: Open Air Flight Paths
+                let open_air_vel = vel * friction_diminish;
+                let open_air_pos_old = p_pos - open_air_vel;
+
+                // FIXED: Use a single unified select line to assign final outputs 
+                // across the hardware SIMD lanes based on lane collision states.
+                *current_pos_ptr = new_pos;
+                *old_pos_ptr = V::select(collision_mask, collision_pos_old, open_air_pos_old);
             }
         }
     }

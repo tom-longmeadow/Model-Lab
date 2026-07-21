@@ -10,7 +10,7 @@ pub struct Column {
 }
 
 pub struct SoaVecStorage<L: SoaLayout> {
-    columns: Vec<Column>,
+    pub columns: Vec<Column>,
     raw_columns: Vec<SoaColumn>, 
     len: usize,
     _marker: PhantomData<L>,
@@ -18,8 +18,8 @@ pub struct SoaVecStorage<L: SoaLayout> {
 
 impl<L: SoaLayout> SoaVecStorage<L> {
     pub fn new(capacity: usize) -> Self {
-        let mut columns = Vec::new();
-        let mut raw_columns = Vec::new();
+        let mut columns = Vec::with_capacity(L::LAYOUTS.len());
+        let mut raw_columns = Vec::with_capacity(L::LAYOUTS.len());
 
         for &layout in L::LAYOUTS {
             columns.push(Column {
@@ -61,19 +61,18 @@ impl<L: SoaLayout> SoaVecStorage<L> {
     }
 
     fn sync_raw_descriptors(&mut self) {
-        for (i, col) in self.columns.iter_mut().enumerate() {
+        let layout_count = L::LAYOUTS.len();
+        let hot_columns = unsafe { self.columns.get_unchecked_mut(0..layout_count) };
+        let hot_raw = unsafe { self.raw_columns.get_unchecked_mut(0..layout_count) };
+
+        for i in 0..layout_count {
+            let col = &mut hot_columns[i];
             let size = col.element_layout.size();
             let cap = if size == 0 { 0 } else { col.bytes.capacity() / size };
             
-            // Accessing as_mut_ptr on a Vec with 0 allocation can yield a dangling address.
-            // We use the true allocation state to determine when to assign a real pointer.
-            let ptr = if cap > 0 {
-                unsafe { NonNull::new_unchecked(col.bytes.as_mut_ptr()) }
-            } else {
-                NonNull::dangling()
-            };
+            let ptr = unsafe { NonNull::new_unchecked(col.bytes.as_mut_ptr()) };
             
-            self.raw_columns[i] = SoaColumn {
+            hot_raw[i] = SoaColumn {
                 ptr,
                 cap,
                 element_layout: col.element_layout,
@@ -81,22 +80,25 @@ impl<L: SoaLayout> SoaVecStorage<L> {
         }
     }
 
-    unsafe fn update_backing_byte_lengths(&mut self, item_len: usize) {
+    // FIXED: Made public so your view methods can guarantee perfect sync states
+    pub unsafe fn update_backing_byte_lengths(&mut self, item_len: usize) {
         for col in &mut self.columns {
             let size = col.element_layout.size();
             unsafe { col.bytes.set_len(item_len * size) };
         }
     }
 
-#[inline(always)]
-pub fn view(&self) -> SoaView<'_, L> {
-    SoaView::new(&self.raw_columns, self.len)
-}
+    #[inline(always)]
+    pub fn view(&self) -> SoaView<'_, L> {
+        SoaView::new(&self.raw_columns, self.len)
+    }
 
-#[inline(always)]
-pub fn view_mut(&mut self) -> SoaView<'_, L> {
-    SoaView::new(&self.raw_columns, self.len)
-}
+    #[inline(always)]
+    pub fn view_mut(&mut self) -> SoaView<'_, L> {
+        // FIXED: Force full structural sync immediately before view extraction passes!
+        self.sync_raw_descriptors();
+        SoaView::new(&self.raw_columns, self.len)
+    }
 }
 
 impl<L: SoaLayout> Storage for SoaVecStorage<L> {
@@ -125,19 +127,10 @@ impl<L: SoaLayout> Storage for SoaVecStorage<L> {
 impl<L: SoaLayout + 'static> ElementStorage for SoaVecStorage<L> {
     type Element = L;
     type View<'a> = SoaView<'a, L> where Self: 'a;
-    // Fixed: Map ViewMut to the unified SoaView type
     type ViewMut<'a> = SoaView<'a, L> where Self: 'a; 
 
-    #[inline(always)]
-    fn view(&self) -> Self::View<'_> { 
-        self.view() 
-    }
-
-    #[inline(always)]
-    fn view_mut(&mut self) -> Self::ViewMut<'_> { 
-        // Calls your updated view_mut() which returns a SoaView
-        self.view_mut() 
-    }
+    #[inline(always)] fn view(&self) -> Self::View<'_> { self.view() }
+    #[inline(always)] fn view_mut(&mut self) -> Self::ViewMut<'_> { self.view_mut() }
 
     fn push(&mut self, element: Self::Element) {
         let current_cap = self.capacity();
@@ -147,51 +140,49 @@ impl<L: SoaLayout + 'static> ElementStorage for SoaVecStorage<L> {
         }
 
         unsafe {
-            // 1. Advance underlying layouts to take ownership of the memory slot
             self.update_backing_byte_lengths(self.len + 1);
         }
         
-        // 2. Refresh physical descriptor addresses so writes map to the correct locations
         self.sync_raw_descriptors();
 
         unsafe {
-            // 3. Populate raw pointer values safely
             L::push_cols(element, &mut self.raw_columns, self.len);
         }
         
-        // 4. Update the tracker length safely at the end
         self.len += 1;
     }
 
     fn swap_remove(&mut self, index: usize) -> Self::Element {
-    assert!(index < self.len, "Index out of bounds");
-    unsafe {
-        // Read out the element at the target index
-        let item = L::read_cols(&self.raw_columns, index);
-        let tail_idx = self.len - 1;
+        assert!(index < self.len, "Index out of bounds");
+        unsafe {
+            let item = L::read_cols(&self.raw_columns, index);
+            let tail_idx = self.len - 1;
 
-        // If it's not the last item, swap the tail item into the hole
-        if index != tail_idx {
-            for i in 0..L::LAYOUTS.len() {
-                let col = &self.raw_columns[i];
-                let size = col.element_layout.size();
-                if size > 0 {
-                    let base_ptr = col.ptr.as_ptr();
-                    let src = base_ptr.add(tail_idx * size);
-                    let dst = base_ptr.add(index * size);
-                    std::ptr::copy_nonoverlapping(src, dst, size);
+            if index != tail_idx {
+                let layout_count = L::LAYOUTS.len();
+                let hot_raw = unsafe { self.raw_columns.get_unchecked(0..layout_count) };
+                
+                for col in hot_raw {
+                    let size = col.element_layout.size();
+                    if size > 0 {
+                        let base_ptr = col.ptr.as_ptr();
+                        let src = base_ptr.add(tail_idx * size);
+                        let dst = base_ptr.add(index * size);
+                        std::ptr::copy_nonoverlapping(src, dst, size);
+                    }
                 }
             }
+
+            self.len -= 1;
+            
+            // FIXED: Keep internal vector byte lengths perfectly in lockstep 
+            // with your tracking variables, preventing memory view drift!
+            self.update_backing_byte_lengths(self.len);
+            self.sync_raw_descriptors();
+            
+            item
         }
-
-        // Just decrement the tracker length. 
-        // No backing bytes truncation or raw descriptor syncing needed!
-        self.len -= 1;
-        
-        item
     }
-}
-
 }
 
 // // =========================================================================

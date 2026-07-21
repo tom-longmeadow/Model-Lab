@@ -1,5 +1,5 @@
 use crate::{math::{FloatScalar, Vector}, sim::solver::particle::{environment::ParticleEnvironment, flags::CollisionFlags}};
-use std::hash::Hash;
+ 
 
 
 pub struct VerletSoaKinetics;
@@ -10,15 +10,22 @@ impl VerletSoaKinetics{
         accel: &mut [V],      
         environment: &ParticleEnvironment<V, F>, 
     ) where 
-        V: Vector + 'static,
-        V::Scalar: FloatScalar, 
-        V::Quantized: Hash + Eq + Copy, 
-        F: CollisionFlags + 'static, // Keeps environment bounds aligned
+        V: Vector,
+        F: CollisionFlags + 'static,
     {
+        let len = accel.len();
+        if len == 0 { return; }
+
         let gravity = environment.gravity.get(); 
-        // 🟢 SAFE & AUTO-VECTORIZED: Iterators eliminate bounds checking entirely
-        for a in accel.iter_mut() {
-            *a = *a + gravity; 
+        
+        // Explicit upfront windowing to remove bounds-checking overhead
+        let acc_slice = unsafe { accel.get_unchecked_mut(0..len) };
+
+        for i in 0..len {
+            unsafe {
+                let a = acc_slice.get_unchecked_mut(i);
+                *a = *a + gravity;
+            }
         }
     }
 
@@ -30,9 +37,7 @@ impl VerletSoaKinetics{
         v_dt: V::Scalar,       
         environment: &ParticleEnvironment<V, F>,
     ) where 
-        V: Vector + 'static,
-        V::Scalar: FloatScalar, 
-        V::Quantized: Hash + Eq + Copy, 
+        V: Vector,
         F: CollisionFlags + 'static,
     {
         let len = pos.len();
@@ -40,30 +45,55 @@ impl VerletSoaKinetics{
             return; 
         }
 
-        let damping_factor = (-environment.tuning.physics.global_damping * v_dt).exp(); 
+        // SAFE PHYSICS TUNING: Fall back to clean defaults if values are zero
+        let damping = environment.tuning.physics.global_damping;
+        let damping_factor = if damping > V::Scalar::ZERO {
+            (-damping * v_dt).exp()
+        } else {
+            V::Scalar::ONE
+        };
+
+        let max_vel = environment.tuning.physics.max_velocity;
+        let max_displacement = if max_vel > V::Scalar::ZERO { max_vel * v_dt } else { V::Scalar::from_f64(1000.0) };
+        let max_disp_sqr = max_displacement * max_displacement;
         let dt_sq = v_dt * v_dt;
 
-        let positions = &mut pos[..len];
-        let positions_old = &mut pos_old[..len];
-        let accelerations = &mut acc[..len];
+        let pos_slice = unsafe { pos.get_unchecked_mut(0..len) };
+        let old_slice = unsafe { pos_old.get_unchecked_mut(0..len) };
+        let acc_slice = unsafe { acc.get_unchecked_mut(0..len) };
 
-        let iter = positions.iter_mut()
-            .zip(positions_old.iter_mut())
-            .zip(accelerations.iter_mut());
+        for i in 0..len {
+            unsafe {
+                let current_pos_ref = pos_slice.get_unchecked_mut(i);
+                let old_pos_ref = old_slice.get_unchecked_mut(i);
+                let acc_ref = acc_slice.get_unchecked_mut(i);
 
-        for ((current_pos, old_pos), acc_val) in iter {
-            let p_curr = *current_pos;
-            let p_old = *old_pos;
-            let a = *acc_val;
+                let p_curr = *current_pos_ref;
+                let p_old = *old_pos_ref;
+                let a = *acc_ref;
 
-            let displacement = p_curr - p_old;
-            // 🟢 dt_sq applies perfectly here to the pure raw acceleration
-            let next_pos = p_curr + (displacement * damping_factor) + (a * dt_sq);
+                // 1. Calculate explicit movement velocity and forces
+                let velocity = (p_curr - p_old) * damping_factor;
+                let impulse = a * dt_sq;
+                let step = velocity + impulse;
+                
+                // 2. Measure actual scalar step distance
+                let dist_sqr = step.length_squared();
 
-            *old_pos = p_curr;
-            *current_pos = next_pos;
-            *acc_val = V::ZERO; // Reset buffer for next frame's forces
+                // 3. Safe, non-collapsing Speed Cap
+                let final_step = if dist_sqr > max_disp_sqr {
+                    let factor = max_displacement / dist_sqr.sqrt();
+                    step * factor
+                } else {
+                    step
+                };
+
+                // 4. Pristine Verlet Writes
+                *old_pos_ref = p_curr;
+                *current_pos_ref = p_curr + final_step;
+                *acc_ref = V::ZERO; // Flush acceleration safely
+            }
         }
     }
-
 }
+        

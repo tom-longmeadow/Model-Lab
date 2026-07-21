@@ -173,15 +173,14 @@ pub trait SoaProperty<L: SoaLayout> {
     type Type;
     const INDEX: usize;
 }
- 
+
 // =========================================================================
-// SAFE RUNTIME-TRACKED STORAGE VIEWS
+// HIGH-PERFORMANCE RUNTIME-TRACKED STORAGE VIEWS
 // =========================================================================
 
 pub struct SoaView<'a, L: SoaLayout> {
     cols: &'a [SoaColumn],
     len: usize,
-    // Track mut loans in lower bits, shared loans in upper bits
     borrow_mask: Cell<u64>, 
     _marker: PhantomData<&'a L>,
 }
@@ -202,7 +201,6 @@ impl<'a, L: SoaLayout> SoaView<'a, L> {
         self.len
     }
 
-    // Shared loan: Multiple readers allowed, zero writers allowed
     #[inline(always)]
     pub fn slice<'b, P>(&'b self, _prop: P) -> ColumnSharedGuard<'b, L, P::Type>
     where
@@ -220,15 +218,15 @@ impl<'a, L: SoaLayout> SoaView<'a, L> {
             index
         );
         
-        // Increment read count in higher 32 bits
         let read_offset = 32 + index;
         self.borrow_mask.set(current + (1 << read_offset));
 
         let slice = if std::mem::size_of::<P::Type>() == 0 || self.len == 0 {
             &[]
         } else {
-            let col = &self.cols[index];
-            unsafe { slice::from_raw_parts(col.ptr.as_ptr() as *const P::Type, self.len) }
+            // Elimination of redundant bounds check via unchecked layout optimizations
+            let col = unsafe { self.cols.get_unchecked(index) };
+            unsafe { std::slice::from_raw_parts(col.ptr.as_ptr() as *const P::Type, self.len) }
         };
 
         ColumnSharedGuard {
@@ -239,62 +237,53 @@ impl<'a, L: SoaLayout> SoaView<'a, L> {
         }
     }
 
-    // Mutable loan: Exactly one writer allowed, zero readers allowed
-    #[inline(always)] 
-    pub fn slice_mut<'b>(&'b self, index: usize) -> ColumnMutGuard<'b, L, u8> {
-        assert!(index < 32, "Column index exceeds tracking limit of 32.");
-        
-        let mut_mask = 1 << index;
-        let read_offset = 32 + index;
-        let current = self.borrow_mask.get();
-        
-        assert!(
-            (current & mut_mask) == 0,
-            "Exclusivity violation: Column {} is already mutably borrowed!",
-            index
-        );
-        assert!(
-            (current & (1 << read_offset)) == 0,
-            "Exclusivity violation: Column {} is already immutably borrowed!",
-            index
-        );
-        
-        self.borrow_mask.set(current | mut_mask);
+    // FIXED: Combined untyped helper to accept a clean generic target directly
+    // This removes the intermediate temporary guard allocation and aliasing warnings
+   #[inline(always)]
+pub fn slice_mut_typed<'b, P>(&'b self, _prop: P) -> ColumnMutGuard<'b, L, P::Type>
+where
+    P: SoaProperty<L>,
+{
+    let index = P::INDEX;
+    assert!(index < 32, "Column index exceeds tracking limit of 32.");
+    
+    let bit = 1 << index;
+    let current = self.borrow_mask.get();
+    
+    // Check both unique write block AND read block mirrors
+    assert!(
+        (current & bit) == 0 && (current & (1 << (32 + index))) == 0,
+        "Exclusivity violation: Column {} is already borrowed!",
+        index
+    );
+    
+    // Set write borrow lock flag
+    self.borrow_mask.set(current | bit);
 
-        ColumnMutGuard {
-            slice: &mut [], // Added the missing slice initializer here
-            index,
-            borrow_mask: &self.borrow_mask,
-            _marker: PhantomData,
-        }
-    }
-
-    // Strongly-typed mutable loan helper
-    #[inline(always)]
-    pub fn slice_mut_typed<'b, P>(&'b self, _prop: P) -> ColumnMutGuard<'b, L, P::Type>
-    where
-        P: SoaProperty<L>,
-    {
-        let guard = self.slice_mut(P::INDEX);
-        let col = &self.cols[P::INDEX];
+    let slice = if std::mem::size_of::<P::Type>() == 0 || self.len == 0 {
+        &mut []
+    } else {
+        // Fetch the column metadata directly
+        let col = unsafe { self.cols.get_unchecked(index) };
         
-        let slice = if std::mem::size_of::<P::Type>() == 0 || self.len == 0 {
-            &mut []
-        } else {
-            unsafe { slice::from_raw_parts_mut(col.ptr.as_ptr() as *mut P::Type, self.len) }
-        };
+        // CRITICAL FIX: The pointer MUST point strictly to the base address.
+        // DO NOT let the AI add any byte offsets here!
+        unsafe { std::slice::from_raw_parts_mut(col.ptr.as_ptr() as *mut P::Type, self.len) }
+    };
 
-        ColumnMutGuard {
-            slice,
-            index: guard.index,
-            borrow_mask: guard.borrow_mask,
-            _marker: PhantomData,
-        }
+    ColumnMutGuard {
+        slice,
+        index,
+        borrow_mask: &self.borrow_mask,
+        _marker: PhantomData,
     }
 }
 
+    
+}
+
 // =========================================================================
-// UNIFIED LOAN GUARDS
+// CLEAN UNIFIED LOAN GUARDS
 // =========================================================================
 
 pub struct ColumnSharedGuard<'b, L: SoaLayout, T> {
@@ -306,8 +295,7 @@ pub struct ColumnSharedGuard<'b, L: SoaLayout, T> {
 
 impl<'b, L: SoaLayout, T> Deref for ColumnSharedGuard<'b, L, T> {
     type Target = [T];
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target { self.slice }
+    #[inline(always)] fn deref(&self) -> &Self::Target { self.slice }
 }
 
 impl<'b, L: SoaLayout, T> Drop for ColumnSharedGuard<'b, L, T> {
@@ -328,13 +316,11 @@ pub struct ColumnMutGuard<'b, L: SoaLayout, T> {
 
 impl<'b, L: SoaLayout, T> Deref for ColumnMutGuard<'b, L, T> {
     type Target = [T];
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target { self.slice }
+    #[inline(always)] fn deref(&self) -> &Self::Target { self.slice }
 }
 
 impl<'b, L: SoaLayout, T> DerefMut for ColumnMutGuard<'b, L, T> {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target { self.slice }
+    #[inline(always)] fn deref_mut(&mut self) -> &mut Self::Target { self.slice }
 }
 
 impl<'b, L: SoaLayout, T> Drop for ColumnMutGuard<'b, L, T> {
@@ -345,7 +331,6 @@ impl<'b, L: SoaLayout, T> Drop for ColumnMutGuard<'b, L, T> {
         self.borrow_mask.set(current & mask);
     }
 }
- 
 
 // /// A specialized storage backend managing discrete, uniform entities.
 // /// Fully compatible with both AoS (Array-of-Structs) and SoA (Struct-of-Arrays).

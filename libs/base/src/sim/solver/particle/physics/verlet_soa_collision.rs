@@ -1,40 +1,68 @@
 use crate::{math::{FloatScalar, Vector}, sim::solver::particle::{environment::ParticleEnvironment, flags::CollisionFlags, 
-space::{collision_registry::CollisionRegistry, grid::UniformGrid, grid_key::GridKey}}};
+space::{collision_registry::CollisionRegistry, grid_key::GridKey}}};
 use std::hash::Hash;
 
 pub struct VerletSoaCollision;
 impl VerletSoaCollision {
+    
+    
     #[inline(always)]
-    pub fn populate_grid<V, F>( 
+    pub fn populate_grid<V,F>( 
         positions: &[V],  
         environment: &mut ParticleEnvironment<V, F>, 
     ) where 
-        V: Vector + 'static,
-       V::Quantized: Hash + Eq + Copy + GridKey,
-        F: CollisionFlags + 'static, // Links cleanly to your environment strategy
+        V: Vector,
+         V::Quantized: Hash + Eq + Copy + GridKey,
+        F: CollisionFlags + 'static,
     {
-        let grid = &mut environment.space.grid;
-        grid.populate_sort(positions);
+        environment.space.grid.populate_sort(positions);
     }
- 
 
     #[inline(always)]
-    fn run_collision_pass<V, F>(
-        grid: &UniformGrid<V>,
-        iterations_count: u64,
-        mut resolve_pair: F,
-    ) where
+    pub fn resolve_collisions<V, F>( 
+        positions: &mut [V],
+        inv_masses: &[V::Scalar],
+        radii: &[V::Scalar], 
+        registry: &mut CollisionRegistry,
+        environment: &ParticleEnvironment<V, F>, 
+     ) where 
         V: Vector,
-        V::Quantized: Hash + Eq + Copy + GridKey,
-        F: FnMut(usize, usize),
+         V::Quantized: Hash + Eq + Copy + GridKey,
+        F: CollisionFlags + 'static,
     {
-        type QKey<VecT> = <VecT as Vector>::Quantized;
+        let max_len = positions.len();
+        if max_len == 0 
+            || inv_masses.len() < max_len 
+            || radii.len() < max_len 
+        {
+            return; 
+        }
 
+        let iterations_count = environment.tuning.collision_iterations;
         if iterations_count == 0 { return; }
 
+        if F::RESTITUTION {
+            registry.clear();  
+        }
+
+        // FIXED: Upfront raw unchecked window bounds mapping
+        let pos_slice = unsafe { positions.get_unchecked_mut(0..max_len) };
+        let inv_mass_slice = unsafe { inv_masses.get_unchecked(0..max_len) };
+        let radii_slice = unsafe { radii.get_unchecked(0..max_len) };
+
+        let slop = environment.tuning.physics.penetration_slop;
+        let bias = environment.tuning.physics.penetration_correction_bias;
+        let base_jitter = environment.state.runtime_jitter;
+        let grid = &environment.space.grid;
+
+        type QKey<VecT> = <VecT as Vector>::Quantized;
+
+        // Clear previous frame tracking history cleanly
+        registry.clear();
+
+        // FIXED: Inlined the entire loop pass directly to eliminate closure reference indirection overhead.
         for _ in 0..iterations_count {
             for &cell_key in &grid.active_keys {
-                // Safe fallback or keeping unwrap for logic correctness
                 let cell = match grid.cells.get(&cell_key) {
                     Some(c) => c,
                     None => continue,
@@ -42,36 +70,58 @@ impl VerletSoaCollision {
                 
                 let indices = &cell.indices;
                 let len = indices.len();
+                if len == 0 { continue; }
+                let cell_indices = unsafe { indices.get_unchecked(0..len) };
 
-                // 1. INTRA-CELL (Safe windowing via upfront length check)
+                // =========================================================
+                // 1. INTRA-CELL PAIR RESOLUTION 
+                // =========================================================
                 if len >= 2 {
-                    let indices = &indices[..len]; // Window bounds declaration
                     for i in 0..len - 1 {
-                        let idx_a = indices[i];
+                        let a = unsafe { *cell_indices.get_unchecked(i) };
+                        if a >= max_len { continue; }
+
                         for j in (i + 1)..len {
-                            let idx_b = indices[j];
-                            resolve_pair(idx_a, idx_b);
+                            let b = unsafe { *cell_indices.get_unchecked(j) };
+                            if b >= max_len { continue; }
+
+                            // Inline execution block with zero-cost pointer mapping
+                            unsafe {
+                                Self::resolve_single_pair::<V,F>(
+                                    a, b, pos_slice, inv_mass_slice, radii_slice,
+                                    slop, bias, base_jitter, registry
+                                );
+                            }
                         }
                     }
                 }
 
-                // 2. NEIGHBOR-CELL (Safe windowing for both slices)
+                // =========================================================
+                // 2. NEIGHBOR-CELL PAIR RESOLUTION
+                // =========================================================
                 for &offset in QKey::<V>::OFFSETS { 
                     let neighbor_key = cell_key + offset;
                     if let Some(neighbor_cell) = grid.cells.get(&neighbor_key) {
                         let neighbor_indices = &neighbor_cell.indices;
                         let neighbor_len = neighbor_indices.len();
                         
-                        if len > 0 && neighbor_len > 0 {
-                            // Window both arrays to their actual lengths
-                            let indices = &indices[..len];
-                            let neighbor_indices = &neighbor_indices[..neighbor_len];
+                        if neighbor_len > 0 {
+                            let n_indices = unsafe { neighbor_indices.get_unchecked(0..neighbor_len) };
 
                             for i in 0..len {
-                                let idx_a = indices[i];
+                                let a = unsafe { *cell_indices.get_unchecked(i) };
+                                if a >= max_len { continue; }
+
                                 for j in 0..neighbor_len {
-                                    let idx_b = neighbor_indices[j];
-                                    resolve_pair(idx_a, idx_b);
+                                    let b = unsafe { *n_indices.get_unchecked(j) };
+                                    if b >= max_len { continue; }
+
+                                    unsafe {
+                                        Self::resolve_single_pair::<V,F>(
+                                            a, b, pos_slice, inv_mass_slice, radii_slice,
+                                            slop, bias, base_jitter, registry
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -81,122 +131,104 @@ impl VerletSoaCollision {
         }
     }
 
+    /// Internal fast-path calculator helper for resolving an individual interaction pair.
     #[inline(always)]
-    pub fn resolve_collisions<V, A, F>( 
-        positions: &mut [V],
-        //positions_old: &mut [V],  
-        inv_masses: &[V::Scalar],
-        radii: &[V::Scalar], 
-        registry: &mut CollisionRegistry, // 🟢 ADDED: Pass the reuseable tracking cache
-        environment: &ParticleEnvironment<V, F>, 
+    unsafe fn resolve_single_pair<V,F>(
+        a: usize,
+        b: usize,
+        pos_slice: &mut [V],
+        inv_mass_slice: &[V::Scalar],
+        radii_slice: &[V::Scalar],
+        slop: V::Scalar,
+        bias: V::Scalar,
+        base_jitter: V,
+        registry: &mut CollisionRegistry,
     ) where 
-        V: Vector + 'static,
-        V::Scalar: 'static,
-        V::Quantized: Hash + Eq + Copy + GridKey,
-        F: CollisionFlags + 'static, 
+        V: Vector,
+         V::Quantized: Hash + Eq + Copy + GridKey,
+        F: CollisionFlags + 'static,
     {
-        let max_len = positions.len();
+        // FIXED: Explicit localized unsafe blocks for strict modern Rust compiler enforcement
+        let (pos_a, pos_b, target_dist) = unsafe {
+            (
+                *pos_slice.get_unchecked(a),
+                *pos_slice.get_unchecked(b),
+                *radii_slice.get_unchecked(a) + *radii_slice.get_unchecked(b),
+            )
+        };
         
-        if max_len == 0 
-            || inv_masses.len() < max_len 
-            || radii.len() < max_len 
-        {
-            return; 
+        let mut delta = pos_a - pos_b;
+        let mut dist_sq = delta.length_squared();
+        let target_dist_sq = target_dist * target_dist;
+
+        // Protection against singular zero alignment distances
+        if dist_sq == V::Scalar::ZERO {
+            let sep_arr = [V::Scalar::from_f64(0.0001), V::Scalar::ZERO];
+            delta = V::from_slice(&sep_arr);
+            dist_sq = delta.length_squared();
         }
 
-        if F::RESTITUTION {
-            registry.clear();  
-        }
+        if dist_sq < target_dist_sq {
+            let dist = dist_sq.sqrt();
+            let raw_penetration = target_dist - dist;
 
-        let positions = &mut positions[..max_len];
-        //let positions_old = if F::RESTITUTION { &mut positions_old[..max_len] } else { &mut [] };
-        let inv_masses = &inv_masses[..max_len];
-        let radii = &radii[..max_len];
+            let is_valid_penetration = if F::USE_SLOP {
+                raw_penetration > slop
+            } else {
+                raw_penetration > V::Scalar::ZERO
+            };
 
-        let slop = environment.tuning.physics.penetration_slop;
-        let bias = environment.tuning.physics.penetration_correction_bias;
-        let base_jitter = environment.state.runtime_jitter;
-        let iterations_count = environment.tuning.collision_iterations;
-
-        struct PhysCtx<S, VecT> {
-            slop: S, bias: S, base_jitter: VecT, 
-        }
-        let ctx = PhysCtx { slop, bias, base_jitter };
-
-        // Clear previous frame history to keep indices fresh
-        registry.clear();
-
-        Self::run_collision_pass(&environment.space.grid, iterations_count, |a, b| {
-            if a >= max_len || b >= max_len { return; }
-
-            let (pos_a, pos_b, target_dist) = (positions[a], positions[b], radii[a] + radii[b]);
-            let mut delta = pos_a - pos_b;
-            let mut dist_sq = delta.length_squared();
-            let target_dist_sq = target_dist * target_dist;
-
-            if dist_sq == V::Scalar::ZERO {
-                let sep_arr = [<V::Scalar as FloatScalar>::from_f64(0.0001), V::Scalar::ZERO];
-                delta = V::from_slice(&sep_arr);
-                dist_sq = delta.length_squared();
-            }
-
-            if dist_sq < target_dist_sq {
-                let dist = dist_sq.sqrt();
-                let raw_penetration = target_dist - dist;
-
-                let is_valid_penetration = if F::USE_SLOP {
-                    raw_penetration > ctx.slop
+            if is_valid_penetration {
+                let penetration = if F::USE_SLOP {
+                    raw_penetration - slop
                 } else {
-                    raw_penetration > V::Scalar::ZERO
+                    raw_penetration
                 };
 
-                if is_valid_penetration {
-                    let penetration = if F::USE_SLOP {
-                        raw_penetration - ctx.slop
+                let mut normal = delta / dist;
+
+                if F::JITTER {
+                    let jitter_vec = normal.mul_elementwise(base_jitter);
+                    normal = normal + jitter_vec;
+                    let normal_len_sq = normal.length_squared();
+                    if normal_len_sq > V::Scalar::ZERO {
+                        normal = normal / normal_len_sq.sqrt();
+                    }
+                }
+
+                // FIXED: Explicit localized unsafe block for mass extraction
+                let (inv_mass_a, inv_mass_b) = unsafe {
+                    (
+                        *inv_mass_slice.get_unchecked(a),
+                        *inv_mass_slice.get_unchecked(b),
+                    )
+                };
+                let total_inv_mass = inv_mass_a + inv_mass_b;
+
+                if total_inv_mass > V::Scalar::ZERO {
+                    let response_magnitude = if F::USE_BIAS {
+                        (penetration * bias) / total_inv_mass
                     } else {
-                        raw_penetration
+                        penetration / total_inv_mass
                     };
 
-                    let mut normal = delta / dist;
+                    let displacement_a = normal * (response_magnitude * inv_mass_a);
+                    let displacement_b = normal * (response_magnitude * inv_mass_b);
 
-                    if F::JITTER {
-                        let jitter_vec = normal.mul_elementwise(ctx.base_jitter);
-                        normal = normal + jitter_vec;
-                        let normal_len_sq = normal.length_squared();
-                        if normal_len_sq > V::Scalar::ZERO {
-                            normal = normal / normal_len_sq.sqrt();
-                        }
+                    // FIXED: Explicit localized unsafe block for final mutation writes
+                    unsafe {
+                        *pos_slice.get_unchecked_mut(a) = pos_a + displacement_a;
+                        *pos_slice.get_unchecked_mut(b) = pos_b - displacement_b;
                     }
 
-                    let inv_mass_a = inv_masses[a];
-                    let inv_mass_b = inv_masses[b];
-                    let total_inv_mass = inv_mass_a + inv_mass_b;
-
-                    if total_inv_mass > V::Scalar::ZERO {
-                        let response_magnitude = if F::USE_BIAS {
-                            (penetration * ctx.bias) / total_inv_mass
-                        } else {
-                            penetration / total_inv_mass
-                        };
-
-                        let displacement_a = normal * (response_magnitude * inv_mass_a);
-                        let displacement_b = normal * (response_magnitude * inv_mass_b);
-
-                        positions[a] = pos_a + displacement_a;
-                        positions[b] = pos_b - displacement_b;
-
-                    
-                        if F::RESTITUTION {
-                            registry.push(a, b);
-                        }
+                    if F::RESTITUTION {
+                        registry.push(a, b);
                     }
                 }
             }
-        });
+        }
     }
 
-    /// Applies a clean velocity bounce pass across all pairs that collided during the frame,
-    /// executing strictly AFTER all iterative position relaxation passes have finished.
     #[inline(always)]
     pub fn apply_particle_restitution<V, F>( 
         registry: &CollisionRegistry,  
@@ -206,78 +238,90 @@ impl VerletSoaCollision {
         radii: &[V::Scalar],
         environment: &ParticleEnvironment<V, F>,
     ) where
-        V: Vector + 'static,
-        V::Scalar: FloatScalar + 'static,
-        F: CollisionFlags + 'static, // Harness the zero-cost compiler optimization toggles
+        V: Vector,
+        F: CollisionFlags + 'static,
     {
-        // 🟢 COMPILE-TIME OPTIMIZATION OVERRIDE:
-        // If this is a Fluid or Fountain simulation, the compiler erases this entire loop body 
-        // from the executable block. Absolute zero runtime execution overhead.
+        // 🟢 COMPILE-TIME BLANKET REMOVAL: Clean, zero-cost branch elimination
         if !F::RESTITUTION || registry.is_empty() { 
             return; 
         }
 
         let max_len = positions.len();
-        if max_len == 0 || positions_old.len() < max_len || inv_masses.len() < max_len || radii.len() < max_len {
+        if max_len == 0 
+            || positions_old.len() < max_len 
+            || inv_masses.len() < max_len 
+            || radii.len() < max_len 
+        {
             return;
         }
 
-        // Sub-slice everything upfront to guarantee the compiler completely eliminates all bounds checks
-        let positions = &positions[..max_len];
-        let positions_old = &mut positions_old[..max_len];
-        let inv_masses = &inv_masses[..max_len];
-        let radii = &radii[..max_len];
-
-        let slop = environment.tuning.physics.penetration_slop;
         let restitution = environment.tuning.physics.restitution;
-
         if restitution <= V::Scalar::ZERO { 
             return; 
         }
 
-        // 🚀 SAFE & AUTO-VECTORIZED PAIRWISE PASS:
-        // Processes real inter-particle impact vectors across recorded collision history
-        for i in 0..registry.len() {
-            let a = registry.a_indices[i];
-            let b = registry.b_indices[i];
+        let slop = environment.tuning.physics.penetration_slop;
+        let reg_len = registry.len();
 
-            // Safety check against malicious registry corruptions or old tracking data
-            if a >= max_len || b >= max_len { continue; }
+        // FIXED: Convert slices to raw pointers upfront. 
+        // This solves the multiple mutable borrow error and gives LLVM clean aliasing routes.
+        let pos_ptr = positions.as_ptr();
+        let pos_old_ptr = positions_old.as_mut_ptr();
+        let inv_mass_ptr = inv_masses.as_ptr();
+        let radii_ptr = radii.as_ptr();
 
-            // Extract values directly through safe, zero-overhead slice indexers
-            let delta = positions[a] - positions[b];
-            let dist_sq = delta.length_squared();
+        // Ensure safe window bounds for the registry histories
+        let reg_a = unsafe { registry.a_indices.get_unchecked(0..reg_len) };
+        let reg_b = unsafe { registry.b_indices.get_unchecked(0..reg_len) };
 
-            let target_dist = radii[a] + radii[b] + slop;
-            let target_dist_sq = target_dist * target_dist;
+        for i in 0..reg_len {
+            unsafe {
+                let a = *reg_a.get_unchecked(i);
+                let b = *reg_b.get_unchecked(i);
 
-            if dist_sq < target_dist_sq && dist_sq > V::Scalar::ZERO {
-                let dist = dist_sq.sqrt();
-                let normal = delta / dist; 
+                // Hardware verification gate
+                if a >= max_len || b >= max_len { continue; }
 
-                let inv_mass_a = inv_masses[a];
-                let inv_mass_b = inv_masses[b];
-                let total_inv_mass = inv_mass_a + inv_mass_b;
+                // FIXED: Read values natively using raw pointer offsets to completely bypass bounds tracking
+                let pos_a = *pos_ptr.add(a);
+                let pos_b = *pos_ptr.add(b);
 
-                if total_inv_mass > V::Scalar::ZERO {
-                    // Extract exact historical velocity vectors natively: Vel = Pos - PosOld
-                    let vel_a = positions[a] - positions_old[a];
-                    let vel_b = positions[b] - positions_old[b];
-                    let rel_vel = vel_a - vel_b;
+                let delta = pos_a - pos_b;
+                let dist_sq = delta.length_squared();
 
-                    // Calculate normal velocity magnitude via Vector dot product
-                    let normal_vel_mag = rel_vel.dot(normal);
+                let target_dist = *radii_ptr.add(a) + *radii_ptr.add(b) + slop;
+                let target_dist_sq = target_dist * target_dist;
 
-                    if normal_vel_mag < V::Scalar::ZERO {
-                        let target_normal_vel = -normal_vel_mag * restitution;
-                        let delta_vel_mag = target_normal_vel - normal_vel_mag;
+                // Branchless combination gate: Prevents deep nested indentation parsing
+                if dist_sq < target_dist_sq && dist_sq > V::Scalar::ZERO {
+                    let dist = dist_sq.sqrt();
+                    let normal = delta / dist; 
 
-                        let vel_impulse_mag = delta_vel_mag / total_inv_mass;
-                        let impulse = normal * vel_impulse_mag;
+                    let inv_mass_a = *inv_mass_ptr.add(a);
+                    let inv_mass_b = *inv_mass_ptr.add(b);
+                    let total_inv_mass = inv_mass_a + inv_mass_b;
 
-                        // Safely adjust historical buffers to instantly apply the bounce velocity
-                        positions_old[a] = positions_old[a] - (impulse * inv_mass_a);
-                        positions_old[b] = positions_old[b] + (impulse * inv_mass_b);
+                    if total_inv_mass > V::Scalar::ZERO {
+                        // Extract historical velocity vectors natively: Vel = Pos - PosOld
+                        let vel_a = pos_a - *pos_old_ptr.add(a);
+                        //let vel_b = pos_b - *pos_ptr.add(b); // Note: keeping your logic mapping matching pos_old read intents
+                        let vel_b_actual = pos_b - *pos_old_ptr.add(b); // Corrected to use pos_old for b
+                        let rel_vel = vel_a - vel_b_actual;
+
+                        let normal_vel_mag = rel_vel.dot(normal);
+
+                        // Only apply an impulse if particles are moving toward each other
+                        if normal_vel_mag < V::Scalar::ZERO {
+                            let target_normal_vel = -normal_vel_mag * restitution;
+                            let delta_vel_mag = target_normal_vel - normal_vel_mag;
+
+                            let vel_impulse_mag = delta_vel_mag / total_inv_mass;
+                            let impulse = normal * vel_impulse_mag;
+
+                            // Direct hardware writing back into the memory locations via raw pointers
+                            *pos_old_ptr.add(a) = *pos_old_ptr.add(a) - (impulse * inv_mass_a);
+                            *pos_old_ptr.add(b) = *pos_old_ptr.add(b) + (impulse * inv_mass_b);
+                        }
                     }
                 }
             }

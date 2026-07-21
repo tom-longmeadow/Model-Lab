@@ -8,7 +8,7 @@ use crate::sim::solver::particle::physics::verlet_soa_constraint::VerletSoaConst
 use crate::sim::solver::particle::physics::verlet_soa_kinetics::VerletSoaKinetics;
 use crate::sim::solver::particle::physics::verlet_soa_prestep::VerletSoaPrestep; 
 use crate::sim::solver::particle::space::collision_registry::CollisionRegistry;
-use crate::sim::solver::particle::space::grid_key::GridKey;
+use crate::sim::solver::particle::space::grid_key::GridKey; 
 use crate::sim::solver::particle::verlet_soa_vec_storage::{ 
     AccField,  SoaInvMass, SoaPos, SoaPosOld, SoaRadius, VerletParticleSoaVecStorage};
 use crate::sim::storage::Storage; 
@@ -36,8 +36,8 @@ where
 {
     fn init(
         &mut self, 
-        storage: &mut VerletParticleSoaVecStorage<V>, 
-        environment: &mut ParticleEnvironment<V, F>
+        _storage: &mut VerletParticleSoaVecStorage<V>, 
+        _environment: &mut ParticleEnvironment<V, F>
     ) {
         self.collision_registry = CollisionRegistry::new(); 
     }
@@ -45,8 +45,8 @@ where
     fn pre_step(
         &mut self, 
         storage: &mut VerletParticleSoaVecStorage<V>, 
-        tick: u64, 
-        step_dt: f64, 
+        _tick: u64, 
+        _step_dt: f64, 
         environment: &mut ParticleEnvironment<V, F>
     ) {
         let len = storage.len();
@@ -76,30 +76,19 @@ where
         // );  
     }
     
-   fn sub_step(
+    fn sub_step(
         &mut self, 
         storage: &mut VerletParticleSoaVecStorage<V>, 
         sub_step_dt: f64, 
         environment: &mut ParticleEnvironment<V, F>
     ) {
-        // // 💡 Add this exact diagnostic block here:
-        // println!(
-        //     "[DEBUG] Storage state on sub_step -> logical len: {}, capacity: {}", 
-        //     storage.len(), 
-        //     storage.capacity()
-        // );
-
         let len = storage.len();
-        if len == 0 { 
-            //println!("[DEBUG] sub_step safely skipped because storage is empty.");
-            return; 
-        }
-      
+        if len == 0 { return; }
 
         let v_dt = V::Scalar::from_f64(sub_step_dt);
-
+        
         // Create exactly ONE view descriptor over the storage engine
-        let view = storage.view();
+        let view = storage.view_mut();
 
         // 1. Extract shared runtime loans safely
         let radii    = view.slice(SoaRadius);
@@ -110,6 +99,8 @@ where
         let mut pos_old = view.slice_mut_typed(SoaPosOld);
         let mut acc     = view.slice_mut_typed(AccField);
 
+
+   
         // 3. Run your physics modifications safely
         VerletSoaKinetics::apply_uniform_acceleration(&mut acc, environment);
         
@@ -119,11 +110,10 @@ where
             &mut acc, 
             v_dt, 
             environment
-        );
-
+        ); 
         VerletSoaCollision::populate_grid(&pos, environment);
 
-        VerletSoaCollision::resolve_collisions::<V, VerletParticleSoaVecStorage<V>, F>(
+        VerletSoaCollision::resolve_collisions::<V, F>(
             &mut pos,  
             &inv_mass, 
             &radii,  
@@ -131,6 +121,16 @@ where
             environment
         );
 
+        VerletSoaCollision::apply_particle_restitution::<V, F>(
+            &self.collision_registry,
+            &pos,          // FIX 1: Pass as shared reference &[V], not &mut
+            &mut pos_old,  // Matches &mut [V]
+            &inv_mass,     // Matches &[V::Scalar]
+            &radii,        // Matches &[V::Scalar]
+            environment,
+        );
+
+        
         VerletSoaConstraint::apply_bounds(
             &mut pos, 
             &mut pos_old, 
@@ -138,6 +138,9 @@ where
             v_dt, 
             environment
         );
+
+
+
     }
  
     fn post_step(

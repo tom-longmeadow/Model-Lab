@@ -33,8 +33,8 @@ where
 
     pub fn environment() -> ParticleEnvironment<V, FluidCollisionFlags> {
         // --- 1. CLOCK & ITERATION SETTINGS ---
-        let substep_count: u64 = 8;
-        let collision_iterations: u64 = 2;
+        let substep_count: u64 = 12;
+        let collision_iterations: u64 = 3;
         let max_particles: usize = 600;  
          
         // --- 2. PHYSICS SIZING & MATERIAL CONSTRAINTS ---
